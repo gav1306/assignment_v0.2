@@ -1,0 +1,89 @@
+.env
+.env.*
+!.env.example
+.envrc
+
+__pycache__/
+*.py[codz]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+htmlcov/
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+nosetests.xml
+cover/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter / IPython
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+
+# PyInstaller
+*.manifest
+*.spec
+
+# PyPI
+.pypirc
+
+
+data/*
+!data/.gitkeep
+
+*.csv
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+*.log
+logs/

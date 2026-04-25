@@ -1,6 +1,0 @@
-openrouter
-pandas
-python-dotenv
-sqlglot>=26
-fastapi>=0.110
-uvicorn[standard]>=0.27
