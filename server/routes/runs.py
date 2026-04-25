@@ -26,6 +26,7 @@ from src.pipeline import AnalyticsPipeline
 from src.pipeline_baseline import BaselineAnalyticsPipeline
 from src.types import PipelineOutput
 
+from server.limits import validate_question_length
 from server.storage import save_run
 from server.stream import SSE_MEDIA_TYPE, format_sse
 
@@ -188,6 +189,7 @@ async def run_optimized(
     q: str = Query(..., description="Natural language question"),
     run_id: str = Query(default_factory=lambda: str(uuid4())),
 ):
+    validate_question_length(q)
     return StreamingResponse(_stream_optimized(q, run_id), media_type=SSE_MEDIA_TYPE)
 
 

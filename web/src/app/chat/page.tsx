@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport, type UIMessage } from "ai";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,7 +86,10 @@ export default function ChatPage() {
     () => new TextStreamChatTransport({ api: "/api/chat" }),
     [],
   );
-  const { messages, sendMessage, status, error } = useChat({ transport });
+  // useId returns a hydration-stable string so useChat doesn't auto-generate
+  // a different random id on server vs client (which mismatches on hydration).
+  const chatId = useId();
+  const { messages, sendMessage, status, error } = useChat({ transport, id: chatId });
   const [input, setInput] = useState("");
 
   const isStreaming = status === "submitted" || status === "streaming";

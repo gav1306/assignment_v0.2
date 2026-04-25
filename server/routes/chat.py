@@ -26,6 +26,7 @@ from src.llm_client import EmptyContentError, OpenRouterLLMClient, build_default
 from src.pipeline import AnalyticsPipeline
 from src.types import PipelineOutput
 
+from server.limits import validate_question_length
 from server.routes.runs import _get_optimized
 from server.storage import save_run
 
@@ -138,6 +139,10 @@ async def chat(request: Request) -> StreamingResponse:
         messages = []
 
     history = _normalize_history(messages)
+
+    # Reject oversized user turns at the API boundary before spending any LLM budget.
+    for _, text in history:
+        validate_question_length(text)
 
     # Off-thread: the rewrite + pipeline are sync, blocking I/O.
     standalone = await asyncio.to_thread(_rewrite_to_standalone, history)

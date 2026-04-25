@@ -28,6 +28,22 @@ function StatusBadge({ status }: { status: string | undefined }) {
   return <Badge className={STATUS_VARIANTS[status] ?? ""}>{status}</Badge>;
 }
 
+// Renders ISO timestamp deterministically during SSR, then swaps to a relative
+// label ("5 min ago") after mount. Without this, formatRelativeTime() reads
+// Date.now() during render and the SSR/CSR strings disagree -> hydration error.
+function RelativeTime({ iso }: { iso: string }) {
+  const fallback = iso.slice(0, 16).replace("T", " ");
+  const [label, setLabel] = useState<string>(fallback);
+
+  useEffect(() => {
+    setLabel(formatRelativeTime(iso));
+    const id = setInterval(() => setLabel(formatRelativeTime(iso)), 30_000);
+    return () => clearInterval(id);
+  }, [iso]);
+
+  return <span suppressHydrationWarning>{label}</span>;
+}
+
 function HistoryRowCard({ row }: { row: HistoryRow }) {
   const [expanded, setExpanded] = useState(false);
   const b = row.baseline;
@@ -50,7 +66,7 @@ function HistoryRowCard({ row }: { row: HistoryRow }) {
               {row.question}
             </p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{formatRelativeTime(row.created_at)}</span>
+              <RelativeTime iso={row.created_at} />
               <span className="font-mono">{row.id.slice(0, 8)}…</span>
             </div>
           </div>
