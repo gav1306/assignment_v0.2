@@ -16,9 +16,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Any
 
+from openrouter.components.chatrequest import Reasoning
 from openrouter.utils.retries import BackoffStrategy, RetryConfig
 
 from src.types import AnswerGenerationOutput, SQLGenerationOutput
@@ -29,9 +31,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "openai/gpt-5-nano"
 
-DEFAULT_MAX_COMPLETION_TOKENS_SQL = 1024
+DEFAULT_MAX_COMPLETION_TOKENS_SQL = 2048
 DEFAULT_MAX_COMPLETION_TOKENS_ANSWER = 800
-DEFAULT_TIMEOUT_MS = 15_000
+DEFAULT_TIMEOUT_MS = 30_000
+
+# Reasoning effort caps the hidden-reasoning token budget for reasoning models
+# like gpt-5-nano. "low" gives deterministic, fast output for translation-style
+# tasks (SQL generation, summarization) and prevents the model from blowing
+# the completion budget on reasoning before any visible output is emitted.
+DEFAULT_REASONING_EFFORT_SQL = "low"
+DEFAULT_REASONING_EFFORT_ANSWER = "low"
 
 DEFAULT_RETRY_INITIAL_MS = 500
 DEFAULT_RETRY_MAX_MS = 4_000
@@ -126,8 +135,10 @@ class OpenRouterLLMClient:
         messages: list[dict[str, str]],
         temperature: float,
         max_completion_tokens: int,
+        *,
+        reasoning_effort: str | None = None,
     ) -> str:
-        response = self._client.chat.send(
+        kwargs: dict[str, Any] = dict(
             messages=messages,
             model=self.model,
             temperature=temperature,
@@ -136,6 +147,10 @@ class OpenRouterLLMClient:
             retries=self._retry_config,
             stream=False,
         )
+        if reasoning_effort:
+            kwargs["reasoning"] = Reasoning(effort=reasoning_effort)
+
+        response = self._client.chat.send(**kwargs)
 
         self._record_usage(response)
 
@@ -155,34 +170,68 @@ class OpenRouterLLMClient:
 
         return content.strip()
 
-    @staticmethod
-    def _extract_sql(text: str) -> str | None:
+    _SQL_STATEMENT_KEYWORDS: tuple[str, ...] = (
+        "select", "with",
+        "delete", "update", "insert", "drop", "create", "alter",
+        "pragma", "attach", "detach", "truncate", "replace", "merge",
+    )
+
+    # Match a SQL keyword at a word boundary. Handles `SELECT\n`, `SELECT(`,
+    # `SELECT *` etc. — anything where the keyword is followed by non-word.
+    _SQL_KEYWORD_PATTERN = re.compile(
+        r"\b(?:" + "|".join(_SQL_STATEMENT_KEYWORDS) + r")\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _extract_sql(cls, text: str) -> str | None:
         candidate = text.strip()
+
+        # Strip markdown code fences (```sql ... ``` or ``` ... ```).
+        if candidate.startswith("```"):
+            candidate = candidate.split("\n", 1)[-1]
+            if candidate.endswith("```"):
+                candidate = candidate[:-3]
+            candidate = candidate.strip()
+
+        # JSON object form: {"sql": "..."}
         if candidate.startswith("{") and candidate.endswith("}"):
             try:
                 parsed = json.loads(candidate)
                 sql = parsed.get("sql")
                 if isinstance(sql, str) and sql.strip():
                     return sql.strip()
-                return None
             except json.JSONDecodeError:
                 pass
-        lower = text.lower()
-        idx = lower.find("select ")
-        if idx >= 0:
-            return text[idx:].strip()
+
+        # Find the first SQL keyword on a word boundary. We accept DML/DDL too
+        # — the validator rejects unsafe operations downstream so the pipeline
+        # can return status='invalid_sql' instead of refusing at the LLM layer.
+        match = cls._SQL_KEYWORD_PATTERN.search(candidate)
+        if match:
+            return candidate[match.start():].strip()
         return None
 
     def generate_sql(self, question: str, context: dict) -> SQLGenerationOutput:
+        table_name = context.get("table", "the_table")
         system_prompt = (
-            "You are a SQL assistant. "
-            "Generate SQLite SELECT queries from natural language questions. "
-            "Return your response in a format that can be parsed to extract the SQL."
+            "You are a SQL generator for a SQLite analytics database.\n"
+            "Use ONLY the columns listed in the provided schema context. "
+            "Do NOT substitute unrelated columns when a concept is missing.\n"
+            "If the user's question requires concepts or fields that are NOT in "
+            "the schema (e.g., zodiac sign, astrology, weather, location), emit "
+            "EXACTLY this SQL and nothing else:\n"
+            f"    SELECT 'cannot_answer' AS reason FROM {table_name} LIMIT 0\n"
+            "Otherwise, generate the SQL that answers the question.\n"
+            "Return ONLY the SQL statement — no commentary, no markdown, no "
+            "explanation.\n"
+            "For DML/DDL operations (DELETE, UPDATE, INSERT, etc.), still emit "
+            "the SQL — a downstream validator handles safety."
         )
         user_prompt = (
-            f"Context: {context}\n\n"
+            f"Schema:\n{json.dumps(context, ensure_ascii=True)}\n\n"
             f"Question: {question}\n\n"
-            "Generate a SQL query to answer this question."
+            "Output: a single SQL statement."
         )
 
         start = time.perf_counter()
@@ -197,6 +246,7 @@ class OpenRouterLLMClient:
                 ],
                 temperature=0.0,
                 max_completion_tokens=self._max_tokens_sql,
+                reasoning_effort=DEFAULT_REASONING_EFFORT_SQL,
             )
             sql = self._extract_sql(text)
             if sql is None:
@@ -263,6 +313,7 @@ class OpenRouterLLMClient:
                 ],
                 temperature=0.2,
                 max_completion_tokens=self._max_tokens_answer,
+                reasoning_effort=DEFAULT_REASONING_EFFORT_ANSWER,
             )
         except EmptyContentError as exc:
             error = f"empty_content: {exc}"
