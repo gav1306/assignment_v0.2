@@ -19,7 +19,9 @@ import sqlite3
 import time
 from pathlib import Path
 
+from src.events import EventSink, PipelineKind, StageEvent
 from src.llm_client import OpenRouterLLMClient, build_default_llm_client
+from src.observability import get_logger
 from src.schema import DEFAULT_TABLE, SchemaContext, load_schema
 from src.types import (
     AnswerGenerationOutput,
@@ -31,10 +33,15 @@ from src.types import (
 from src.validator import validate as validate_sql
 
 
+logger = get_logger(__name__)
+
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = BASE_DIR / "data" / "gaming_mental_health.sqlite"
 
 EXECUTION_ROW_FETCH_LIMIT = 100
+
+ANSWER_EVENT_PREVIEW_CHARS = 200
 
 # Sentinel literal embedded by the SQL-generation prompt when the model determines
 # the question cannot be answered with the available schema. Detected after
@@ -89,6 +96,8 @@ class SQLiteExecutor:
 class AnalyticsPipeline:
     """End-to-end NL question -> SQL -> answer pipeline."""
 
+    PIPELINE_KIND: PipelineKind = "optimized"
+
     def __init__(
         self,
         db_path: str | Path = DEFAULT_DB_PATH,
@@ -100,13 +109,21 @@ class AnalyticsPipeline:
         self.executor = SQLiteExecutor(self.db_path)
         self.schema: SchemaContext = load_schema(self.db_path, table)
 
-    def run(self, question: str, request_id: str | None = None) -> PipelineOutput:
+    def run(
+        self,
+        question: str,
+        request_id: str | None = None,
+        *,
+        event_sink: EventSink | None = None,
+    ) -> PipelineOutput:
         start = time.perf_counter()
 
         sql_gen_output = self.llm.generate_sql(question, self.schema.to_prompt_dict())
-        unanswerable_signal = _looks_unanswerable(sql_gen_output.sql)
+        self._emit_sql_generation_event(sql_gen_output, event_sink, request_id)
 
+        unanswerable_signal = _looks_unanswerable(sql_gen_output.sql)
         validation_output = self._validate(sql_gen_output.sql)
+        self._emit_validation_event(validation_output, event_sink, request_id)
 
         if unanswerable_signal:
             executable_sql = None
@@ -116,9 +133,12 @@ class AnalyticsPipeline:
             )
 
         execution_output = self.executor.run(executable_sql)
+        self._emit_execution_event(execution_output, executable_sql, event_sink, request_id)
+
         answer_output = self.llm.generate_answer(
             question, executable_sql, execution_output.rows
         )
+        self._emit_answer_event(answer_output, event_sink, request_id)
 
         status = self._classify_status(
             sql_gen_output,
@@ -138,6 +158,18 @@ class AnalyticsPipeline:
 
         total_llm_stats = self._aggregate_llm_stats(sql_gen_output, answer_output)
 
+        logger.info(
+            "pipeline_run_completed",
+            extra={
+                "request_id": request_id,
+                "pipeline": self.PIPELINE_KIND,
+                "status": status,
+                "total_ms": timings["total_ms"],
+                "total_tokens": total_llm_stats["total_tokens"],
+                "llm_calls": total_llm_stats["llm_calls"],
+            },
+        )
+
         return PipelineOutput(
             status=status,
             question=question,
@@ -151,6 +183,116 @@ class AnalyticsPipeline:
             answer=answer_output.answer,
             timings=timings,
             total_llm_stats=total_llm_stats,
+        )
+
+    def _emit(
+        self,
+        sink: EventSink | None,
+        event: StageEvent,
+        request_id: str | None,
+    ) -> None:
+        logger.info(
+            "stage_completed",
+            extra={
+                "request_id": request_id,
+                "pipeline": event.pipeline,
+                "stage": event.stage,
+                "status": event.status,
+                "elapsed_ms": event.elapsed_ms,
+                "tokens_delta": event.tokens_delta,
+            },
+        )
+        if sink is None:
+            return
+        try:
+            sink(event)
+        except Exception:
+            logger.exception("event_sink_error", extra={"request_id": request_id})
+
+    def _emit_sql_generation_event(
+        self,
+        output: SQLGenerationOutput,
+        sink: EventSink | None,
+        request_id: str | None,
+    ) -> None:
+        self._emit(
+            sink,
+            StageEvent(
+                pipeline=self.PIPELINE_KIND,
+                stage="sql_generation",
+                status="failed" if output.error else "completed",
+                elapsed_ms=output.timing_ms,
+                tokens_delta=int(output.llm_stats.get("total_tokens", 0)),
+                payload={"sql": output.sql, "error": output.error},
+            ),
+            request_id,
+        )
+
+    def _emit_validation_event(
+        self,
+        output: SQLValidationOutput,
+        sink: EventSink | None,
+        request_id: str | None,
+    ) -> None:
+        self._emit(
+            sink,
+            StageEvent(
+                pipeline=self.PIPELINE_KIND,
+                stage="sql_validation",
+                status="completed" if output.is_valid else "failed",
+                elapsed_ms=output.timing_ms,
+                payload={
+                    "is_valid": output.is_valid,
+                    "validated_sql": output.validated_sql,
+                    "error": output.error,
+                },
+            ),
+            request_id,
+        )
+
+    def _emit_execution_event(
+        self,
+        output: SQLExecutionOutput,
+        executable_sql: str | None,
+        sink: EventSink | None,
+        request_id: str | None,
+    ) -> None:
+        if executable_sql is None:
+            status = "skipped"
+        elif output.error:
+            status = "failed"
+        else:
+            status = "completed"
+        self._emit(
+            sink,
+            StageEvent(
+                pipeline=self.PIPELINE_KIND,
+                stage="sql_execution",
+                status=status,
+                elapsed_ms=output.timing_ms,
+                payload={"row_count": output.row_count, "error": output.error},
+            ),
+            request_id,
+        )
+
+    def _emit_answer_event(
+        self,
+        output: AnswerGenerationOutput,
+        sink: EventSink | None,
+        request_id: str | None,
+    ) -> None:
+        preview = output.answer[:ANSWER_EVENT_PREVIEW_CHARS]
+        self._emit(
+            sink,
+            StageEvent(
+                pipeline=self.PIPELINE_KIND,
+                stage="answer_generation",
+                status="failed" if output.error else "completed",
+                elapsed_ms=output.timing_ms,
+                tokens_delta=int(output.llm_stats.get("total_tokens", 0)),
+                payload={"answer_preview": preview, "error": output.error},
+            ),
+            request_id,
         )
 
     def _validate(self, sql: str | None) -> SQLValidationOutput:
