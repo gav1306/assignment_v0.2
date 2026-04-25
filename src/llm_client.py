@@ -1,13 +1,67 @@
+"""LLM client (optimized) — wraps the OpenRouter SDK with reliability + observability primitives.
+
+Differences from the frozen baseline (src/llm_client_baseline.py):
+- Uses max_completion_tokens (the SDK's deprecated max_tokens cap of 240 starves
+  reasoning models like gpt-5-nano and forces content=None on every call).
+- Records token usage from res.usage on every call (assignment hard requirement).
+- Raises a domain-specific EmptyContentError on missing content so callers can
+  degrade gracefully instead of crashing the pipeline.
+- Per-call timeout via timeout_ms.
+- Network retries delegated to the SDK's RetryConfig (transient connection errors,
+  exponential backoff). Empty-content errors are NOT retried — same params won't help.
+"""
+
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any
 
-from src.types import SQLGenerationOutput, AnswerGenerationOutput
+from openrouter.utils.retries import BackoffStrategy, RetryConfig
+
+from src.types import AnswerGenerationOutput, SQLGenerationOutput
+
+
+logger = logging.getLogger(__name__)
+
 
 DEFAULT_MODEL = "openai/gpt-5-nano"
+
+DEFAULT_MAX_COMPLETION_TOKENS_SQL = 1024
+DEFAULT_MAX_COMPLETION_TOKENS_ANSWER = 800
+DEFAULT_TIMEOUT_MS = 15_000
+
+DEFAULT_RETRY_INITIAL_MS = 500
+DEFAULT_RETRY_MAX_MS = 4_000
+DEFAULT_RETRY_EXPONENT = 2.0
+DEFAULT_RETRY_MAX_ELAPSED_MS = 20_000
+
+
+class LLMClientError(Exception):
+    """Base exception for LLM client failures."""
+
+
+class EmptyContentError(LLMClientError):
+    """LLM call returned no usable text content.
+
+    Typically caused by the reasoning model exhausting its budget on hidden
+    reasoning tokens before producing visible output, or the provider truncating
+    the response. Caller should treat as 'unanswerable' for this turn rather
+    than retry with identical parameters.
+    """
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Ignoring non-integer %s=%r; using default %d", name, raw, default)
+        return default
 
 
 class OpenRouterLLMClient:
@@ -15,41 +69,98 @@ class OpenRouterLLMClient:
 
     provider_name = "openrouter"
 
-    def __init__(self, api_key: str, model: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        *,
+        timeout_ms: int | None = None,
+        max_tokens_sql: int | None = None,
+        max_tokens_answer: int | None = None,
+    ) -> None:
         try:
             from openrouter import OpenRouter
         except ModuleNotFoundError as exc:
             raise RuntimeError("Missing dependency: install 'openrouter'.") from exc
+
         self.model = model or os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
         self._client = OpenRouter(api_key=api_key)
-        self._stats = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._stats = self._fresh_stats()
 
-    def _chat(self, messages: list[dict[str, str]], temperature: float, max_tokens: int) -> str:
-        res = self._client.chat.send(
+        self._timeout_ms = timeout_ms if timeout_ms is not None else _env_int(
+            "OPENROUTER_TIMEOUT_MS", DEFAULT_TIMEOUT_MS
+        )
+        self._max_tokens_sql = max_tokens_sql if max_tokens_sql is not None else _env_int(
+            "OPENROUTER_MAX_TOKENS_SQL", DEFAULT_MAX_COMPLETION_TOKENS_SQL
+        )
+        self._max_tokens_answer = max_tokens_answer if max_tokens_answer is not None else _env_int(
+            "OPENROUTER_MAX_TOKENS_ANSWER", DEFAULT_MAX_COMPLETION_TOKENS_ANSWER
+        )
+
+        self._retry_config = RetryConfig(
+            strategy="backoff",
+            backoff=BackoffStrategy(
+                initial_interval=DEFAULT_RETRY_INITIAL_MS,
+                max_interval=DEFAULT_RETRY_MAX_MS,
+                exponent=DEFAULT_RETRY_EXPONENT,
+                max_elapsed_time=DEFAULT_RETRY_MAX_ELAPSED_MS,
+            ),
+            retry_connection_errors=True,
+        )
+
+    @staticmethod
+    def _fresh_stats() -> dict[str, int]:
+        return {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    def _record_usage(self, response: Any) -> None:
+        self._stats["llm_calls"] += 1
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        self._stats["prompt_tokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
+        self._stats["completion_tokens"] += int(getattr(usage, "completion_tokens", 0) or 0)
+        self._stats["total_tokens"] += int(getattr(usage, "total_tokens", 0) or 0)
+
+    def _chat(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        max_completion_tokens: int,
+    ) -> str:
+        response = self._client.chat.send(
             messages=messages,
             model=self.model,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_completion_tokens,
+            timeout_ms=self._timeout_ms,
+            retries=self._retry_config,
             stream=False,
         )
 
-        # TODO: Implement token counting here
-        # Required for efficiency evaluation - see README.md for details.
+        self._record_usage(response)
 
-        choices = getattr(res, "choices", None) or []
+        choices = getattr(response, "choices", None) or []
         if not choices:
-            raise RuntimeError("OpenRouter response contained no choices.")
-        content = getattr(getattr(choices[0], "message", None), "content", None)
-        if not isinstance(content, str):
-            raise RuntimeError("OpenRouter response content is not text.")
+            raise EmptyContentError("OpenRouter response contained no choices")
+
+        first_choice = choices[0]
+        message = getattr(first_choice, "message", None)
+        content = getattr(message, "content", None)
+        if not isinstance(content, str) or not content.strip():
+            finish_reason = getattr(first_choice, "finish_reason", None)
+            raise EmptyContentError(
+                f"OpenRouter returned no text content (finish_reason={finish_reason!r}, "
+                f"max_completion_tokens={max_completion_tokens})"
+            )
+
         return content.strip()
 
     @staticmethod
     def _extract_sql(text: str) -> str | None:
-        maybe_json = text.strip()
-        if maybe_json.startswith("{") and maybe_json.endswith("}"):
+        candidate = text.strip()
+        if candidate.startswith("{") and candidate.endswith("}"):
             try:
-                parsed = json.loads(maybe_json)
+                parsed = json.loads(candidate)
                 sql = parsed.get("sql")
                 if isinstance(sql, str) and sql.strip():
                     return sql.strip()
@@ -68,19 +179,30 @@ class OpenRouterLLMClient:
             "Generate SQLite SELECT queries from natural language questions. "
             "Return your response in a format that can be parsed to extract the SQL."
         )
-        user_prompt = f"Context: {context}\n\nQuestion: {question}\n\nGenerate a SQL query to answer this question."
+        user_prompt = (
+            f"Context: {context}\n\n"
+            f"Question: {question}\n\n"
+            "Generate a SQL query to answer this question."
+        )
 
         start = time.perf_counter()
-        error = None
-        sql = None
+        error: str | None = None
+        sql: str | None = None
 
         try:
             text = self._chat(
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 temperature=0.0,
-                max_tokens=240,
+                max_completion_tokens=self._max_tokens_sql,
             )
             sql = self._extract_sql(text)
+            if sql is None:
+                error = "sql_extraction_failed: model returned no parseable SELECT"
+        except EmptyContentError as exc:
+            error = f"empty_content: {exc}"
         except Exception as exc:
             error = str(exc)
 
@@ -95,19 +217,27 @@ class OpenRouterLLMClient:
             error=error,
         )
 
-    def generate_answer(self, question: str, sql: str | None, rows: list[dict[str, Any]]) -> AnswerGenerationOutput:
+    def generate_answer(
+        self,
+        question: str,
+        sql: str | None,
+        rows: list[dict[str, Any]],
+    ) -> AnswerGenerationOutput:
         if not sql:
             return AnswerGenerationOutput(
-                answer="I cannot answer this with the available table and schema. Please rephrase using known survey fields.",
+                answer=(
+                    "I cannot answer this with the available table and schema. "
+                    "Please rephrase using known survey fields."
+                ),
                 timing_ms=0.0,
-                llm_stats={"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": self.model},
+                llm_stats={**self._fresh_stats(), "model": self.model},
                 error=None,
             )
         if not rows:
             return AnswerGenerationOutput(
                 answer="Query executed, but no rows were returned.",
                 timing_ms=0.0,
-                llm_stats={"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "model": self.model},
+                llm_stats={**self._fresh_stats(), "model": self.model},
                 error=None,
             )
 
@@ -122,15 +252,21 @@ class OpenRouterLLMClient:
         )
 
         start = time.perf_counter()
-        error = None
+        error: str | None = None
         answer = ""
 
         try:
             answer = self._chat(
-                messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 temperature=0.2,
-                max_tokens=220,
+                max_completion_tokens=self._max_tokens_answer,
             )
+        except EmptyContentError as exc:
+            error = f"empty_content: {exc}"
+            answer = "I cannot answer this question right now (the model returned no content)."
         except Exception as exc:
             error = str(exc)
             answer = f"Error generating answer: {error}"
@@ -147,9 +283,9 @@ class OpenRouterLLMClient:
         )
 
     def pop_stats(self) -> dict[str, Any]:
-        out = dict(self._stats or {})
-        self._stats = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        return out
+        snapshot = dict(self._stats)
+        self._stats = self._fresh_stats()
+        return snapshot
 
 
 def build_default_llm_client() -> OpenRouterLLMClient:
