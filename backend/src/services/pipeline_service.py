@@ -91,7 +91,10 @@ class AnalyticsPipeline:
         self._emit_execution_event(execution_output, executable_sql, event_sink, request_id)
 
         answer_output = self.llm.generate_answer(
-            question, executable_sql, execution_output.rows
+            question,
+            executable_sql,
+            execution_output.rows,
+            cannot_answer=unanswerable_signal,
         )
         self._emit_answer_event(answer_output, event_sink, request_id)
 

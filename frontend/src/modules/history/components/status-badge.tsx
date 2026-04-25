@@ -1,15 +1,33 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
-const STATUS_VARIANTS: Record<string, string> = {
-  success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  unanswerable: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  invalid_sql: "bg-red-500/15 text-red-700 dark:text-red-300",
-  error: "bg-red-500/15 text-red-700 dark:text-red-300",
+const STATUS_STYLES: Record<string, string> = {
+  success:
+    "bg-[var(--accent-mint)]/10 text-[var(--accent-mint)] border-[var(--accent-mint)]/30",
+  unanswerable:
+    "bg-[var(--warn)]/10 text-[var(--warn)] border-[var(--warn)]/30",
+  invalid_sql: "bg-[var(--bad)]/10 text-[var(--bad)] border-[var(--bad)]/30",
+  error: "bg-[var(--bad)]/10 text-[var(--bad)] border-[var(--bad)]/30",
 };
 
 export function StatusBadge({ status }: { status: string | undefined }) {
-  if (!status) return <Badge variant="outline">—</Badge>;
-  return <Badge className={STATUS_VARIANTS[status] ?? ""}>{status}</Badge>;
+  if (!status) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-border px-2 h-5 text-[10px] font-mono uppercase tracking-[0.06em] text-[var(--ink-dim)]">
+        —
+      </span>
+    );
+  }
+  const cls = STATUS_STYLES[status] ?? "border-border text-[var(--ink-muted)]";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 h-5 text-[10px] font-mono uppercase tracking-[0.06em]",
+        cls,
+      )}
+    >
+      {status.replace("_", " ")}
+    </span>
+  );
 }

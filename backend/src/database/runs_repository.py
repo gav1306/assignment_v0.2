@@ -76,14 +76,25 @@ def save_run(
         conn.execute(sql, (run_id, question, created_at, payload))
 
 
-def list_runs(limit: int = 50, db_path: Path = DEFAULT_DB_PATH) -> list[dict]:
+def list_runs(
+    limit: int = 50,
+    offset: int = 0,
+    db_path: Path = DEFAULT_DB_PATH,
+) -> list[dict]:
     with _connect(db_path) as conn:
         cur = conn.execute(
             "SELECT id, question, created_at, baseline_json, optimized_json "
-            "FROM runs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            "FROM runs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         )
         return [_row_to_dict(row) for row in cur.fetchall()]
+
+
+def count_runs(db_path: Path = DEFAULT_DB_PATH) -> int:
+    with _connect(db_path) as conn:
+        cur = conn.execute("SELECT COUNT(*) AS n FROM runs")
+        row = cur.fetchone()
+        return int(row["n"]) if row else 0
 
 
 def get_run(run_id: str, db_path: Path = DEFAULT_DB_PATH) -> dict | None:

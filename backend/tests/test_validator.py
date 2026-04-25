@@ -140,6 +140,26 @@ class ValidatorRejectionTests(unittest.TestCase):
         result = validate("this is not sql", self.schema)
         self.assertFalse(result.is_valid)
 
+    def test_constant_only_select_rejected(self) -> None:
+        # The model occasionally improvises a literal SELECT (e.g. for a
+        # greeting) to satisfy the "return SQL" contract. The improvised
+        # query has no FROM and bypasses the dataset entirely; reject it.
+        result = validate("SELECT 'hello' AS msg LIMIT 1", self.schema)
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.error, "no_table_reference")
+
+    def test_cte_only_select_without_dataset_rejected(self) -> None:
+        # A CTE that itself has no FROM is the same loophole one level deeper.
+        sql = "WITH t AS (SELECT 1 AS x) SELECT * FROM t"
+        result = validate(sql, self.schema)
+        self.assertFalse(result.is_valid)
+        self.assertEqual(result.error, "no_table_reference")
+
+    def test_cannot_answer_sentinel_passes(self) -> None:
+        sql = "SELECT 'cannot_answer' AS reason FROM analytics LIMIT 0"
+        result = validate(sql, self.schema)
+        self.assertTrue(result.is_valid, result.error)
+
     def test_cte_with_unknown_inner_table_still_rejected(self) -> None:
         sql = "WITH t AS (SELECT * FROM users) SELECT * FROM t"
         result = validate(sql, self.schema)

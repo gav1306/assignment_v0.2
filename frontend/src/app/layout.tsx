@@ -1,25 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 
 import { Providers } from "@/app/providers";
+import { FooterModelTag } from "@/components/footer-model-tag";
 import { SiteNav } from "@/components/site-nav";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Pipeline A/B — Analytics Comparison",
+  title: "Pipeline A/B — Baseline vs Solution",
   description:
-    "Live side-by-side comparison of baseline and optimized SQL analytics pipelines.",
+    "Side-by-side comparison of baseline and optimized SQL analytics pipelines.",
 };
 
 export default function RootLayout({
@@ -30,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body
@@ -39,9 +42,16 @@ export default function RootLayout({
       >
         <Providers>
           <SiteNav />
-          <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+          <main className="flex-1 mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10 py-12">
             {children}
           </main>
+          <footer className="border-t border-border">
+            <div className="mx-auto max-w-[1240px] px-5 sm:px-8 lg:px-10 py-6 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.06em] font-mono text-[var(--ink-dim)]">
+              <span>gaming · mental health dataset</span>
+              <FooterModelTag />
+              <span>SSE · FastAPI · Next.js</span>
+            </div>
+          </footer>
         </Providers>
       </body>
     </html>

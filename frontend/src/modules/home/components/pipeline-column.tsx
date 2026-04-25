@@ -1,7 +1,6 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { StageCard } from "@/modules/home/components/stage-card";
 import type { PipelineStream } from "@/modules/home/hooks/use-pipeline-stream";
 import type {
@@ -20,23 +19,52 @@ interface PipelineColumnProps {
 
 const PIPELINE_LABELS: Record<PipelineKind, string> = {
   baseline: "Baseline",
-  optimized: "Optimized",
+  optimized: "Solution",
 };
 
-const PIPELINE_DESCRIPTIONS: Record<PipelineKind, string> = {
-  baseline: "Frozen starter code (bugs intact). Stages reported on completion.",
-  optimized:
-    "Validated, schema-aware, observable. Stages stream as they happen.",
+const PIPELINE_SUBS: Record<PipelineKind, string> = {
+  baseline: "frozen starter (bugs intact)",
+  optimized: "optimized · streaming",
 };
 
-const RUN_STATUS_VARIANTS: Record<RunStatus | "running" | "idle", string> = {
-  success: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  unanswerable: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  invalid_sql: "bg-red-500/15 text-red-700 dark:text-red-300",
-  error: "bg-red-500/15 text-red-700 dark:text-red-300",
-  running: "bg-blue-500/15 text-blue-700 dark:text-blue-300 animate-pulse",
-  idle: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+type HeaderState = RunStatus | "running" | "idle";
+
+const STATE_COLOR: Record<HeaderState, string> = {
+  success: "text-[var(--accent-mint)]",
+  unanswerable: "text-[var(--warn)]",
+  invalid_sql: "text-[var(--bad)]",
+  error: "text-[var(--bad)]",
+  running: "text-[var(--ink)]",
+  idle: "text-[var(--ink-dim)]",
 };
+
+function HeaderDot({ state }: { state: HeaderState }) {
+  if (state === "running") {
+    return (
+      <span className="relative inline-flex h-2 w-2">
+        <span className="absolute inset-0 rounded-full bg-foreground/70 animate-ping" />
+        <span className="absolute inset-0 rounded-full bg-foreground/70" />
+      </span>
+    );
+  }
+  if (state === "idle") {
+    return (
+      <span className="inline-block h-2 w-2 rounded-full border border-[var(--ink-dim)]/60" />
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "inline-block h-2 w-2 rounded-full",
+        state === "success"
+          ? "bg-[var(--accent-mint)] shadow-[0_0_8px_var(--accent-glow)]"
+          : state === "unanswerable"
+            ? "bg-[var(--warn)]"
+            : "bg-[var(--bad)]",
+      )}
+    />
+  );
+}
 
 export function PipelineColumn({ pipeline, stream }: PipelineColumnProps) {
   const eventByStage = new Map<StageName, StageEvent>();
@@ -51,7 +79,7 @@ export function PipelineColumn({ pipeline, stream }: PipelineColumnProps) {
   );
   const expectedRunningIndex = lastReachedIndex === -1 ? -1 : lastReachedIndex;
 
-  const headerStatus =
+  const headerState: HeaderState =
     stream.state === "completed" && stream.final
       ? stream.final.status
       : stream.state === "streaming" || stream.state === "connecting"
@@ -60,89 +88,120 @@ export function PipelineColumn({ pipeline, stream }: PipelineColumnProps) {
           ? "error"
           : "idle";
 
-  const headerLabel = headerStatus.replace("_", " ");
+  const headerLabel = headerState.replace("_", " ");
+  const isOptimized = pipeline === "optimized";
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">
-            {PIPELINE_LABELS[pipeline]}
-          </CardTitle>
-          <Badge className={RUN_STATUS_VARIANTS[headerStatus]}>
-            {headerLabel}
-          </Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {PIPELINE_DESCRIPTIONS[pipeline]}
-        </p>
-        {stream.final && (
-          <div className="flex gap-3 text-xs text-muted-foreground pt-1">
-            <span>{formatMs(stream.final.timings.total_ms)}</span>
-            <span>
-              {formatTokens(stream.final.total_llm_stats.total_tokens)} tokens
+    <section
+      className={cn(
+        "relative rounded-[10px] border border-border bg-[var(--bg-elev)] overflow-hidden flex flex-col",
+        isOptimized
+          ? "bg-[linear-gradient(to_bottom,oklch(0.88_0.15_165_/_0.04),transparent_40%)] halo-mint"
+          : "bg-[linear-gradient(to_bottom,oklch(0.55_0.012_260_/_0.04),transparent_40%)]",
+      )}
+    >
+      <header className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-border/70">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-block h-2 w-2 rounded-full",
+                isOptimized
+                  ? "bg-[var(--accent-mint)] shadow-[0_0_8px_var(--accent-glow)]"
+                  : "bg-[var(--baseline)]",
+              )}
+            />
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-foreground">
+              {PIPELINE_LABELS[pipeline]}
             </span>
-            <span>{stream.final.total_llm_stats.llm_calls} LLM calls</span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--ink-dim)] truncate">
+              · {PIPELINE_SUBS[pipeline]}
+            </span>
           </div>
-        )}
-      </CardHeader>
+          {stream.final ? (
+            <div className="flex items-baseline gap-4 mt-3">
+              <span className="num-l text-foreground tabular-nums">
+                {formatMs(stream.final.timings.total_ms)}
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--ink-dim)]">
+                {formatTokens(stream.final.total_llm_stats.total_tokens)} tok ·{" "}
+                {stream.final.total_llm_stats.llm_calls} calls
+              </span>
+            </div>
+          ) : (
+            <p className="font-mono text-[11px] text-[var(--ink-dim)] mt-3">
+              awaiting run…
+            </p>
+          )}
+        </div>
+        <div
+          className={cn(
+            "flex items-center gap-1.5 shrink-0",
+            STATE_COLOR[headerState],
+          )}
+        >
+          <HeaderDot state={headerState} />
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em]">
+            {headerLabel}
+          </span>
+        </div>
+      </header>
 
-      <CardContent className="flex-1 space-y-2">
+      <ol className="space-y-2 p-4" aria-live="polite">
         {STAGE_ORDER.map((stage, index) => (
-          <StageCard
-            key={stage}
-            stage={stage}
-            event={eventByStage.get(stage) ?? null}
-            expectedRunning={
-              stream.state !== "idle" &&
-              stream.state !== "error" &&
-              !eventByStage.has(stage) &&
-              index === expectedRunningIndex
-            }
-          />
+          <li key={stage}>
+            <StageCard
+              stage={stage}
+              pipeline={pipeline}
+              event={eventByStage.get(stage) ?? null}
+              expectedRunning={
+                stream.state !== "idle" &&
+                stream.state !== "error" &&
+                !eventByStage.has(stage) &&
+                index === expectedRunningIndex
+              }
+              index={index}
+            />
+          </li>
         ))}
+      </ol>
 
-        {stream.error && (
-          <p className="text-xs text-red-600 dark:text-red-400 pt-2">
+      {stream.error ? (
+        <div className="px-5 pb-4">
+          <p className="font-mono text-[11px] text-[var(--bad)]">
             stream error: {stream.error}
           </p>
-        )}
+        </div>
+      ) : null}
 
-        {stream.final && (
-          <Card className="bg-muted/30">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">
-                Final answer
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm whitespace-pre-wrap break-words">
-                {stream.final.answer || "(no answer)"}
-              </p>
-              {stream.final.sql && (
-                <details className="mt-3 text-xs">
-                  <summary className="cursor-pointer text-muted-foreground hover:underline">
-                    show SQL
-                  </summary>
-                  <pre className="mt-2 bg-background border rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">
-                    {stream.final.sql}
-                  </pre>
-                </details>
-              )}
-              {stream.final.rows.length > 0 && (
-                <details className="mt-2 text-xs">
-                  <summary className="cursor-pointer text-muted-foreground hover:underline">
-                    show {stream.final.rows.length} row(s)
-                  </summary>
-                  <pre className="mt-2 bg-background border rounded p-2 overflow-x-auto text-xs">
-                    {JSON.stringify(stream.final.rows.slice(0, 20), null, 2)}
-                  </pre>
-                </details>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </CardContent>
-    </Card>
+      {stream.final ? (
+        <div className="border-t border-border/70 p-5 space-y-3 bg-[var(--bg)]/40">
+          <p className="label-mono">Final answer</p>
+          <p className="text-sm whitespace-pre-wrap break-words text-foreground leading-relaxed">
+            {stream.final.answer || "(no answer)"}
+          </p>
+          {stream.final.sql ? (
+            <details className="group">
+              <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-muted)] hover:text-foreground transition-colors select-none">
+                + show SQL
+              </summary>
+              <pre className="mt-2 bg-[var(--bg)] border border-border rounded-md p-2.5 text-[11px] leading-relaxed font-mono overflow-x-auto whitespace-pre-wrap break-words text-[var(--ink-muted)]">
+                {stream.final.sql}
+              </pre>
+            </details>
+          ) : null}
+          {stream.final.rows.length > 0 ? (
+            <details>
+              <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-muted)] hover:text-foreground transition-colors select-none">
+                + show {stream.final.rows.length} row(s)
+              </summary>
+              <pre className="mt-2 bg-[var(--bg)] border border-border rounded-md p-2.5 text-[11px] leading-relaxed font-mono overflow-x-auto text-[var(--ink-muted)]">
+                {JSON.stringify(stream.final.rows.slice(0, 20), null, 2)}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }

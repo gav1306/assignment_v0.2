@@ -6,14 +6,16 @@ import { historyApi } from "@/modules/history/api/history-api";
 
 export const historyKeys = {
   all: ["history"] as const,
-  list: (limit: number) => [...historyKeys.all, "list", limit] as const,
+  list: (limit: number, offset = 0) =>
+    [...historyKeys.all, "list", limit, offset] as const,
   detail: (runId: string) => [...historyKeys.all, "detail", runId] as const,
 };
 
-export function useHistory(limit: number) {
+export function useHistory(limit: number, offset = 0) {
   return useQuery({
-    queryKey: historyKeys.list(limit),
-    queryFn: () => historyApi.list(limit),
+    queryKey: historyKeys.list(limit, offset),
+    queryFn: () => historyApi.list(limit, offset),
+    placeholderData: (prev) => prev,
   });
 }
 

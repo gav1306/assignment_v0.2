@@ -71,8 +71,20 @@ class FakeLLMClient:
         question: str,
         sql: str | None,
         rows: list[dict[str, Any]],
+        *,
+        cannot_answer: bool = False,
     ) -> AnswerGenerationOutput:
-        self.calls.append(("generate_answer", {"question": question, "sql": sql, "rows": rows}))
+        self.calls.append(
+            (
+                "generate_answer",
+                {
+                    "question": question,
+                    "sql": sql,
+                    "rows": rows,
+                    "cannot_answer": cannot_answer,
+                },
+            )
+        )
         if not sql:
             return AnswerGenerationOutput(
                 answer=(

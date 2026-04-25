@@ -17,3 +17,6 @@ class RunRecord(BaseModel):
 
 class HistoryListResponse(BaseModel):
     runs: list[RunRecord] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 50
+    offset: int = 0

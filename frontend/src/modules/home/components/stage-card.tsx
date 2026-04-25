@@ -2,34 +2,105 @@
 
 import { useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { StageEvent, StageName, StageStatus } from "@/types";
+import { cn } from "@/lib/utils";
+import type {
+  PipelineKind,
+  StageEvent,
+  StageName,
+  StageStatus,
+} from "@/types";
 import { STAGE_LABELS } from "@/types";
 import { formatMs, formatTokens } from "@/utils/format";
 
+type DisplayStatus = StageStatus | "pending";
+
 interface StageCardProps {
   stage: StageName;
+  pipeline: PipelineKind;
   event: StageEvent | null;
   expectedRunning?: boolean;
+  index: number;
 }
 
-const STATUS_VARIANTS: Record<StageStatus, string> = {
-  running: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  completed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  failed: "bg-red-500/15 text-red-700 dark:text-red-300",
-  skipped: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+const STAGE_KIND: Record<StageName, "llm" | "db" | "work"> = {
+  sql_generation: "llm",
+  sql_validation: "work",
+  sql_execution: "db",
+  answer_generation: "llm",
 };
 
-function StatusPill({ status }: { status: StageStatus | "pending" }) {
-  if (status === "pending") {
+const STAGE_SUBLINE: Record<StageName, string> = {
+  sql_generation: "schema-aware prompt → SQL",
+  sql_validation: "AST + table allowlist",
+  sql_execution: "SQLite · read-only",
+  answer_generation: "rows → grounded answer",
+};
+
+function KindTag({ kind }: { kind: "llm" | "db" | "work" }) {
+  if (kind === "work") {
     return (
-      <Badge variant="outline" className="text-muted-foreground">
-        pending
-      </Badge>
+      <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-dim)]">
+        work
+      </span>
     );
   }
-  return <Badge className={STATUS_VARIANTS[status]}>{status}</Badge>;
+  return (
+    <span
+      className="font-mono text-[10px] uppercase tracking-[0.06em]"
+      style={{
+        color: kind === "llm" ? "var(--kind-llm)" : "var(--kind-db)",
+      }}
+    >
+      {kind}
+    </span>
+  );
+}
+
+function StateDot({
+  status,
+  pipeline,
+}: {
+  status: DisplayStatus;
+  pipeline: PipelineKind;
+}) {
+  if (status === "pending") {
+    return (
+      <span className="inline-block h-2.5 w-2.5 rounded-full border border-[var(--ink-dim)]/60" />
+    );
+  }
+  if (status === "running") {
+    return (
+      <span
+        className={cn(
+          "inline-block h-2.5 w-2.5 rounded-full",
+          pipeline === "optimized"
+            ? "bg-[var(--accent-mint)] animate-pulse-ring"
+            : "bg-[var(--baseline)] animate-pulse-ring-neutral",
+        )}
+      />
+    );
+  }
+  if (status === "completed") {
+    return (
+      <span
+        className={cn(
+          "inline-flex h-2.5 w-2.5 items-center justify-center rounded-full",
+          pipeline === "optimized"
+            ? "bg-[var(--accent-mint)]"
+            : "bg-[var(--baseline)]",
+        )}
+      />
+    );
+  }
+  if (status === "failed") {
+    return (
+      <span className="inline-block h-2.5 w-2.5 rounded-full bg-[var(--bad)]" />
+    );
+  }
+  // skipped
+  return (
+    <span className="inline-block h-2.5 w-2.5 rounded-full border border-[var(--ink-dim)]/40" />
+  );
 }
 
 function PayloadView({
@@ -44,16 +115,16 @@ function PayloadView({
     const error = payload.error as string | undefined;
     return (
       <div className="space-y-2">
-        {sql && (
-          <pre className="bg-muted/50 rounded p-2 text-xs overflow-x-auto whitespace-pre-wrap break-words">
+        {sql ? (
+          <pre className="bg-[var(--bg)] border border-border rounded-md p-2.5 text-[11px] leading-relaxed font-mono overflow-x-auto whitespace-pre-wrap break-words text-[var(--ink-muted)]">
             {sql}
           </pre>
-        )}
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400">
+        ) : null}
+        {error ? (
+          <p className="text-[11px] font-mono text-[var(--bad)]">
             error: {error}
           </p>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -61,11 +132,11 @@ function PayloadView({
     const rowCount = payload.row_count as number | undefined;
     const error = payload.error as string | undefined;
     return (
-      <div className="text-xs text-muted-foreground space-y-1">
-        {typeof rowCount === "number" && <p>rows fetched: {rowCount}</p>}
-        {error && (
-          <p className="text-red-600 dark:text-red-400">error: {error}</p>
-        )}
+      <div className="text-[11px] font-mono text-[var(--ink-muted)] space-y-1">
+        {typeof rowCount === "number" ? (
+          <p>rows fetched: {rowCount}</p>
+        ) : null}
+        {error ? <p className="text-[var(--bad)]">error: {error}</p> : null}
       </div>
     );
   }
@@ -74,14 +145,16 @@ function PayloadView({
     const error = payload.error as string | undefined;
     return (
       <div className="space-y-2">
-        {preview && (
-          <p className="text-xs whitespace-pre-wrap break-words">{preview}</p>
-        )}
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400">
+        {preview ? (
+          <p className="text-[12px] whitespace-pre-wrap break-words text-foreground">
+            {preview}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="text-[11px] font-mono text-[var(--bad)]">
             error: {error}
           </p>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -90,12 +163,14 @@ function PayloadView({
 
 export function StageCard({
   stage,
+  pipeline,
   event,
   expectedRunning = false,
+  index,
 }: StageCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const status: StageStatus | "pending" = event
+  const status: DisplayStatus = event
     ? event.status
     : expectedRunning
       ? "running"
@@ -104,45 +179,88 @@ export function StageCard({
   const elapsed = event?.elapsed_ms ?? 0;
   const tokens = event?.tokens_delta ?? 0;
   const hasPayload = event && Object.keys(event.payload || {}).length > 0;
+  const isError = status === "failed";
+  const isOptimized = pipeline === "optimized";
 
   return (
-    <Card className={status === "pending" ? "opacity-60" : ""}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-medium">
-            {STAGE_LABELS[stage]}
-          </CardTitle>
-          <StatusPill status={status} />
-        </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {event ? (
-            <>
-              <span>{formatMs(elapsed)}</span>
-              {tokens > 0 && <span>{formatTokens(tokens)} tokens</span>}
-            </>
-          ) : status === "running" ? (
-            <span className="animate-pulse">awaiting…</span>
-          ) : (
-            <span>—</span>
-          )}
-        </div>
-      </CardHeader>
-      {hasPayload && (
-        <CardContent className="pt-0">
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-xs text-muted-foreground hover:underline"
-          >
-            {expanded ? "hide details" : "show details"}
-          </button>
-          {expanded && (
-            <div className="mt-2">
-              <PayloadView stage={stage} payload={event!.payload} />
-            </div>
-          )}
-        </CardContent>
+    <div
+      className={cn(
+        "rounded-[10px] border bg-[var(--bg)] ease-expo-out transition-all",
+        isError
+          ? "border-[var(--bad)]/50 bg-[var(--bad)]/5"
+          : status === "running"
+            ? isOptimized
+              ? "border-[var(--accent-mint)]/40 bg-[var(--bg-elev-2)]/60"
+              : "border-[var(--baseline)]/50 bg-[var(--bg-elev-2)]/60"
+            : "border-border",
+        status === "pending" && "opacity-60",
       )}
-    </Card>
+      style={{
+        animationDelay: `${index * 60}ms`,
+      }}
+    >
+      <div className="p-3.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="pt-1">
+              <StateDot status={status} pipeline={pipeline} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] tracking-[0.06em] text-[var(--ink-dim)]">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <KindTag kind={STAGE_KIND[stage]} />
+              </div>
+              <p className="text-[13px] font-medium text-foreground mt-0.5">
+                {STAGE_LABELS[stage]}
+              </p>
+              <p className="text-[11px] text-[var(--ink-dim)] font-mono mt-0.5 truncate">
+                {STAGE_SUBLINE[stage]}
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            {event ? (
+              <>
+                <p className="num-s text-foreground tabular-nums">
+                  {formatMs(elapsed)}
+                </p>
+                {tokens > 0 ? (
+                  <p className="font-mono text-[10px] text-[var(--ink-dim)] mt-0.5">
+                    {formatTokens(tokens)} tok
+                  </p>
+                ) : null}
+              </>
+            ) : status === "running" ? (
+              <span className="font-mono text-[11px] text-[var(--ink-muted)] animate-pulse">
+                running…
+              </span>
+            ) : (
+              <span className="font-mono text-[11px] text-[var(--ink-dim)]">
+                —
+              </span>
+            )}
+          </div>
+        </div>
+
+        {hasPayload ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-muted)] hover:text-foreground transition-colors"
+            >
+              {expanded ? "− hide details" : "+ show details"}
+            </button>
+            {expanded ? (
+              <div className="mt-2">
+                <PayloadView stage={stage} payload={event!.payload} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/modules/history/components/status-badge";
 import type { PipelineKind, StoredPipelineOutput } from "@/types";
 import { formatMs, formatTokens } from "@/utils/format";
@@ -12,87 +12,113 @@ interface RunDetailProps {
 
 const PIPELINE_LABELS: Record<PipelineKind, string> = {
   baseline: "Baseline",
-  optimized: "Optimized",
+  optimized: "Solution",
 };
 
 export function RunDetail({ pipeline, output }: RunDetailProps) {
+  const isOptimized = pipeline === "optimized";
+
   if (!output) {
     return (
-      <Card className="opacity-60">
-        <CardHeader>
-          <CardTitle className="text-sm">{PIPELINE_LABELS[pipeline]}</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            No data persisted for this pipeline.
-          </p>
-        </CardHeader>
-      </Card>
+      <div className="rounded-[10px] border border-dashed border-border bg-[var(--bg)] p-4 opacity-70">
+        <p className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--ink-dim)]">
+          {PIPELINE_LABELS[pipeline]}
+        </p>
+        <p className="text-[12px] text-[var(--ink-muted)] mt-1">
+          No data persisted for this pipeline.
+        </p>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm">{PIPELINE_LABELS[pipeline]}</CardTitle>
-          <StatusBadge status={output.status} />
-        </div>
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>{formatMs(output.timings.total_ms)} total</span>
-          <span>
-            {formatTokens(output.total_llm_stats.total_tokens)} tokens
+    <div
+      className={cn(
+        "rounded-[10px] border border-border bg-[var(--bg)] p-4 space-y-3",
+        isOptimized
+          ? "bg-[linear-gradient(to_bottom,oklch(0.88_0.15_165_/_0.04),transparent_60%)]"
+          : "bg-[linear-gradient(to_bottom,oklch(0.55_0.012_260_/_0.04),transparent_60%)]",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              isOptimized
+                ? "bg-[var(--accent-mint)] shadow-[0_0_6px_var(--accent-glow)]"
+                : "bg-[var(--baseline)]",
+            )}
+          />
+          <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-foreground">
+            {PIPELINE_LABELS[pipeline]}
           </span>
-          <span>{output.total_llm_stats.llm_calls} LLM calls</span>
-          <span>{output.total_llm_stats.model}</span>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3 text-xs">
+        <StatusBadge status={output.status} />
+      </div>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-[var(--ink-muted)]">
+        <span className="text-foreground tabular-nums">
+          {formatMs(output.timings.total_ms)}
+        </span>
+        <span>·</span>
+        <span>{formatTokens(output.total_llm_stats.total_tokens)} tok</span>
+        <span>·</span>
+        <span>{output.total_llm_stats.llm_calls} calls</span>
+        <span>·</span>
+        <span>{output.total_llm_stats.model}</span>
+      </div>
+
+      <div>
+        <p className="label-mono mb-1.5">Answer</p>
+        <p className="text-[12px] whitespace-pre-wrap break-words text-foreground leading-relaxed">
+          {output.answer || "(no answer)"}
+        </p>
+      </div>
+
+      {output.sql ? (
         <div>
-          <p className="text-muted-foreground uppercase tracking-wide mb-1">
-            Answer
-          </p>
-          <p className="whitespace-pre-wrap break-words">
-            {output.answer || "(no answer)"}
-          </p>
+          <p className="label-mono mb-1.5">SQL</p>
+          <pre className="bg-[var(--bg-elev)] border border-border rounded-md p-2.5 text-[11px] leading-relaxed font-mono overflow-x-auto whitespace-pre-wrap break-words text-[var(--ink-muted)]">
+            {output.sql}
+          </pre>
         </div>
+      ) : null}
 
-        {output.sql && (
-          <div>
-            <p className="text-muted-foreground uppercase tracking-wide mb-1">
-              SQL
-            </p>
-            <pre className="bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-words">
-              {output.sql}
-            </pre>
-          </div>
-        )}
-
-        {output.rows.length > 0 && (
-          <details>
-            <summary className="cursor-pointer text-muted-foreground hover:underline">
-              {output.rows.length} row(s)
-            </summary>
-            <pre className="mt-2 bg-muted/50 rounded p-2 overflow-x-auto">
-              {JSON.stringify(output.rows.slice(0, 20), null, 2)}
-            </pre>
-          </details>
-        )}
-
+      {output.rows.length > 0 ? (
         <details>
-          <summary className="cursor-pointer text-muted-foreground hover:underline">
-            stage timings
+          <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-muted)] hover:text-foreground transition-colors select-none">
+            + {output.rows.length} row(s)
           </summary>
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
-            <span>SQL gen:</span>
-            <span>{formatMs(output.timings.sql_generation_ms)}</span>
-            <span>Validation:</span>
-            <span>{formatMs(output.timings.sql_validation_ms)}</span>
-            <span>Execution:</span>
-            <span>{formatMs(output.timings.sql_execution_ms)}</span>
-            <span>Answer gen:</span>
-            <span>{formatMs(output.timings.answer_generation_ms)}</span>
-          </div>
+          <pre className="mt-2 bg-[var(--bg-elev)] border border-border rounded-md p-2.5 text-[11px] leading-relaxed font-mono overflow-x-auto text-[var(--ink-muted)]">
+            {JSON.stringify(output.rows.slice(0, 20), null, 2)}
+          </pre>
         </details>
-      </CardContent>
-    </Card>
+      ) : null}
+
+      <details>
+        <summary className="cursor-pointer font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--ink-muted)] hover:text-foreground transition-colors select-none">
+          + stage timings
+        </summary>
+        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[11px]">
+          <span className="text-[var(--ink-dim)]">SQL gen</span>
+          <span className="text-foreground tabular-nums text-right">
+            {formatMs(output.timings.sql_generation_ms)}
+          </span>
+          <span className="text-[var(--ink-dim)]">Validation</span>
+          <span className="text-foreground tabular-nums text-right">
+            {formatMs(output.timings.sql_validation_ms)}
+          </span>
+          <span className="text-[var(--ink-dim)]">Execution</span>
+          <span className="text-foreground tabular-nums text-right">
+            {formatMs(output.timings.sql_execution_ms)}
+          </span>
+          <span className="text-[var(--ink-dim)]">Answer gen</span>
+          <span className="text-foreground tabular-nums text-right">
+            {formatMs(output.timings.answer_generation_ms)}
+          </span>
+        </div>
+      </details>
+    </div>
   );
 }

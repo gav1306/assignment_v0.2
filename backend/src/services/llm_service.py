@@ -220,9 +220,18 @@ class OpenRouterLLMClient:
             "You are a SQL generator for a SQLite analytics database.\n"
             "Use ONLY the columns listed in the provided schema context. "
             "Do NOT substitute unrelated columns when a concept is missing.\n"
-            "If the user's question requires concepts or fields that are NOT in "
-            "the schema (e.g., zodiac sign, astrology, weather, location), emit "
-            "EXACTLY this SQL and nothing else:\n"
+            f"Every SELECT MUST read from the dataset table `{table_name}` "
+            "(directly or via a CTE that reads from it). NEVER emit a "
+            "constant-only SELECT such as `SELECT 'hi' AS msg` or "
+            "`SELECT 'answer' AS x LIMIT 1` — those bypass the dataset and "
+            "fabricate rows.\n"
+            "Use the cannot_answer sentinel below in any of these cases:\n"
+            "  • the input is conversational (greetings, small talk, thanks)\n"
+            "  • the input is a meta-question about you, the assistant, or "
+            "this tool ('who are you?', 'what can you do?', 'help')\n"
+            "  • the question requires concepts or fields NOT in the schema "
+            "(e.g., zodiac sign, astrology, weather, location)\n"
+            "Emit EXACTLY this SQL and nothing else for those cases:\n"
             f"    SELECT 'cannot_answer' AS reason FROM {table_name} LIMIT 0\n"
             "Otherwise, generate the SQL that answers the question.\n"
             "Return ONLY the SQL statement. No commentary, no markdown, no "
@@ -274,7 +283,25 @@ class OpenRouterLLMClient:
         question: str,
         sql: str | None,
         rows: list[dict[str, Any]],
+        *,
+        cannot_answer: bool = False,
     ) -> AnswerGenerationOutput:
+        # The SQL prompt instructs the model to emit a `cannot_answer` sentinel
+        # SELECT for conversational/out-of-scope inputs. The pipeline detects
+        # the sentinel upstream and signals it via `cannot_answer=True` so the
+        # answer step can return a tailored conversational reply.
+        if cannot_answer:
+            return AnswerGenerationOutput(
+                answer=(
+                    "I'm a query assistant for the gaming-mental-health survey "
+                    "dataset. I can't answer that from the data — try asking "
+                    "about anxiety, depression, addiction, age groups, gender, "
+                    "hours played, or related survey fields."
+                ),
+                timing_ms=0.0,
+                llm_stats={**self._fresh_stats(), "model": self.model},
+                error=None,
+            )
         if not sql:
             return AnswerGenerationOutput(
                 answer=(

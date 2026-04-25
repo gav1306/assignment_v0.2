@@ -102,12 +102,17 @@ def _enforce_no_forbidden_nodes(tree: exp.Expression) -> None:
 
 def _enforce_known_tables(tree: exp.Expression, schema: SchemaContext) -> None:
     referenced = {t.name for t in tree.find_all(exp.Table) if t.name}
-    if not referenced:
-        return
     cte_names = {cte.alias for cte in tree.find_all(exp.CTE) if cte.alias}
     unknown = referenced - {schema.table} - cte_names
     if unknown:
         raise ValidationError(f"unknown_table: {sorted(unknown)}")
+    # Closes a loophole where the model improvises a constant-only SELECT
+    # (no FROM, or FROM a CTE that itself has no real FROM) to satisfy the
+    # "must return SQL" contract — e.g. for greetings or chitchat. Such a
+    # query bypasses the dataset entirely and synthesizes rows; reject it
+    # so the model is forced to use the cannot_answer sentinel instead.
+    if schema.table not in referenced:
+        raise ValidationError("no_table_reference")
 
 
 def _enforce_known_columns(tree: exp.Expression, schema: SchemaContext) -> None:

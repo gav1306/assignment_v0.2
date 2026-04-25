@@ -1,15 +1,7 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { BarFill } from "@/components/comparison/bar-fill";
+import { formatMs, formatTokens } from "@/utils/format";
 
 interface ComparisonChartProps {
   baselineMs: number;
@@ -18,45 +10,85 @@ interface ComparisonChartProps {
   optimizedTokens: number;
 }
 
+interface RowProps {
+  label: string;
+  baselineValue: number;
+  optimizedValue: number;
+  baselineDisplay: string;
+  optimizedDisplay: string;
+  delayMs: number;
+}
+
+function Row({
+  label,
+  baselineValue,
+  optimizedValue,
+  baselineDisplay,
+  optimizedDisplay,
+  delayMs,
+}: RowProps) {
+  const max = Math.max(baselineValue, optimizedValue) || 1;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="label-mono">{label}</span>
+        <span className="font-mono text-[11px] text-[var(--ink-dim)]">
+          lower = better
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[80px_1fr_auto] items-center gap-3">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--ink-muted)]">
+          baseline
+        </span>
+        <BarFill
+          target={baselineValue / max}
+          variant="baseline"
+          delayMs={delayMs}
+        />
+        <span className="num-s text-[var(--ink-muted)]">
+          {baselineDisplay}
+        </span>
+      </div>
+      <div className="grid grid-cols-[80px_1fr_auto] items-center gap-3">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--accent-mint)]">
+          optimized
+        </span>
+        <BarFill
+          target={optimizedValue / max}
+          variant="optimized"
+          delayMs={delayMs + 120}
+        />
+        <span className="num-s text-foreground">{optimizedDisplay}</span>
+      </div>
+    </div>
+  );
+}
+
 export function ComparisonChart({
   baselineMs,
   optimizedMs,
   baselineTokens,
   optimizedTokens,
 }: ComparisonChartProps) {
-  const data = [
-    {
-      metric: "Latency (ms)",
-      baseline: Math.round(baselineMs),
-      optimized: Math.round(optimizedMs),
-    },
-    {
-      metric: "Tokens",
-      baseline: baselineTokens,
-      optimized: optimizedTokens,
-    },
-  ];
-
   return (
-    <div className="w-full h-64">
-      <ResponsiveContainer>
-        <BarChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis dataKey="metric" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
-          <Tooltip
-            contentStyle={{
-              fontSize: 12,
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--background)",
-            }}
-          />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Bar dataKey="baseline" fill="#94a3b8" name="Baseline" />
-          <Bar dataKey="optimized" fill="#10b981" name="Optimized" />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="space-y-6">
+      <Row
+        label="Latency"
+        baselineValue={baselineMs}
+        optimizedValue={optimizedMs}
+        baselineDisplay={formatMs(baselineMs)}
+        optimizedDisplay={formatMs(optimizedMs)}
+        delayMs={0}
+      />
+      <Row
+        label="Tokens"
+        baselineValue={baselineTokens}
+        optimizedValue={optimizedTokens}
+        baselineDisplay={`${formatTokens(baselineTokens)}t`}
+        optimizedDisplay={`${formatTokens(optimizedTokens)}t`}
+        delayMs={120}
+      />
     </div>
   );
 }

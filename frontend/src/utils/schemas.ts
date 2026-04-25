@@ -95,6 +95,13 @@ export const HistoryRowSchema = z.object({
 
 export const HistoryResponseSchema = z.object({
   runs: z.array(HistoryRowSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+
+export const ConfigResponseSchema = z.object({
+  model: z.string(),
 });
 
 // Form schemas (shared between QueryInput and the chat input).

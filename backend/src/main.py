@@ -16,7 +16,7 @@ from src.constants.http_constants import (
 )
 from src.database.runs_repository import init_db
 from src.lib.observability import configure_logging
-from src.routes import chat_routes, history_routes, runs_routes
+from src.routes import chat_routes, config_routes, history_routes, runs_routes
 
 
 def _allowed_origins() -> list[str]:
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(runs_routes.router, tags=["runs"])
     app.include_router(history_routes.router, tags=["history"])
     app.include_router(chat_routes.router, tags=["chat"])
+    app.include_router(config_routes.router, tags=["config"])
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:

@@ -4,12 +4,19 @@ import { apiClient, parseWith } from "@/lib/api-client";
 import { HistoryResponseSchema, HistoryRowSchema } from "@/utils/schemas";
 import type { HistoryRow } from "@/types";
 
+export interface HistoryPage {
+  runs: HistoryRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const historyApi = {
-  async list(limit: number): Promise<HistoryRow[]> {
+  async list(limit: number, offset = 0): Promise<HistoryPage> {
     const { data } = await apiClient.get<unknown>("/history", {
-      params: { limit },
+      params: { limit, offset },
     });
-    return parseWith(HistoryResponseSchema, data, "history").runs;
+    return parseWith(HistoryResponseSchema, data, "history");
   },
 
   async get(runId: string): Promise<HistoryRow> {

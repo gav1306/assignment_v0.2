@@ -11,8 +11,11 @@ router = APIRouter()
 
 
 @router.get("/history")
-def list_history(limit: int = Query(50, ge=1, le=500)) -> dict:
-    return get_history(limit=limit)
+def list_history(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    return get_history(limit=limit, offset=offset)
 
 
 @router.get("/runs/{run_id}")
