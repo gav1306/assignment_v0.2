@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.observability import configure_logging
 
-from server.routes import history, runs
+from server.routes import chat, history, runs
 from server.storage import init_db
 
 
@@ -45,10 +45,12 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
+        expose_headers=["X-Run-Id"],
     )
 
     app.include_router(runs.router, tags=["runs"])
     app.include_router(history.router, tags=["history"])
+    app.include_router(chat.router, tags=["chat"])
 
     @app.get("/health", tags=["meta"])
     def health() -> dict[str, str]:
