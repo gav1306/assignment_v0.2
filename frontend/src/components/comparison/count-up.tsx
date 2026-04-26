@@ -8,8 +8,6 @@ interface CountUpProps {
   decimals?: number;
   suffix?: string;
   prefix?: string;
-  /** Start animating only when scrolled into view. Default true. */
-  whenVisible?: boolean;
 }
 
 function easeOutCubic(t: number) {
@@ -22,54 +20,29 @@ export function CountUp({
   decimals = 0,
   suffix = "",
   prefix = "",
-  whenVisible = true,
 }: CountUpProps) {
   const [display, setDisplay] = useState(0);
-  const ref = useRef<HTMLSpanElement | null>(null);
-  const startedRef = useRef(false);
+  // Tracks the latest displayed value across renders so subsequent value
+  // changes animate from where the last animation left off (a smooth tick)
+  // rather than restarting from zero each time.
+  const displayRef = useRef(0);
 
   useEffect(() => {
-    if (!whenVisible) {
-      runAnimation();
-      return;
-    }
-    const node = ref.current;
-    if (!node) return;
-    if (typeof IntersectionObserver === "undefined") {
-      runAnimation();
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting && !startedRef.current) {
-            startedRef.current = true;
-            runAnimation();
-            observer.disconnect();
-            break;
-          }
-        }
-      },
-      { threshold: 0.2 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-
-    function runAnimation() {
-      const start = performance.now();
-      const from = 0;
-      const to = value;
-      let raf = 0;
-      const tick = (now: number) => {
-        const t = Math.min(1, (now - start) / durationMs);
-        const eased = easeOutCubic(t);
-        setDisplay(from + (to - from) * eased);
-        if (t < 1) raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(raf);
-    }
-  }, [value, durationMs, whenVisible]);
+    const start = performance.now();
+    const from = displayRef.current;
+    const to = value;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = easeOutCubic(t);
+      const current = from + (to - from) * eased;
+      displayRef.current = current;
+      setDisplay(current);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, durationMs]);
 
   const formatted =
     decimals > 0
@@ -80,7 +53,7 @@ export function CountUp({
       : Math.round(display).toLocaleString();
 
   return (
-    <span ref={ref}>
+    <span>
       {prefix}
       {formatted}
       {suffix}

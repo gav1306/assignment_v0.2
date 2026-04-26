@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { CountUp } from "@/components/comparison/count-up";
 import { Reveal } from "@/components/comparison/reveal";
@@ -25,10 +25,30 @@ import { SolutionStats } from "@/modules/home/components/solution-stats";
 import { StagesSplit } from "@/modules/home/components/stages-split";
 import { usePipelineStream } from "@/modules/home/hooks/use-pipeline-stream";
 import { summarize } from "@/modules/home/utils/aggregate";
+import { pipelineStreamQueryKeys } from "@/modules/home/utils/query-keys";
 import { useConfig } from "@/modules/config/hooks/use-config";
 import { useHistory } from "@/modules/history/hooks/use-history";
 import { useRunStore } from "@/stores/run-store";
-import { historyQueryKeys } from "@/utils/query-keys";
+import type {
+  HistoryRow,
+  RunCompletedEvent,
+  StoredPipelineOutput,
+} from "@/types";
+
+function liveFinalToStoredOutput(
+  final: RunCompletedEvent,
+): StoredPipelineOutput {
+  return {
+    status: final.status,
+    question: final.question,
+    request_id: final.run_id,
+    sql: final.sql,
+    rows: final.rows,
+    answer: final.answer,
+    timings: final.timings,
+    total_llm_stats: final.total_llm_stats,
+  };
+}
 
 export function HomePage() {
   const queryClient = useQueryClient();
@@ -39,7 +59,31 @@ export function HomePage() {
   const { data: historyPage } = useHistory(50);
   const { data: config } = useConfig();
   const historyRows = historyPage?.runs;
-  const summary = summarize(historyRows);
+
+  // Stitch the just-arrived SSE finals into the rows used for summary +
+  // dashboards. The history refetch lags the SSE event by one network round
+  // trip, so without this the chips stay stale until /history catches up.
+  // Dedupe by run_id: once /history returns the row, the live copy drops
+  // out and we read the canonical persisted version.
+  const baselineFinal = baseline.final;
+  const optimizedFinal = optimized.final;
+  const augmentedRows = useMemo<HistoryRow[] | undefined>(() => {
+    const liveRunId = optimizedFinal?.run_id ?? baselineFinal?.run_id ?? null;
+    if (!liveRunId) return historyRows;
+    const base = historyRows ?? [];
+    if (base.some((r) => r.id === liveRunId)) return base;
+    const liveRow: HistoryRow = {
+      id: liveRunId,
+      question:
+        optimizedFinal?.question ?? baselineFinal?.question ?? "",
+      created_at: new Date().toISOString(),
+      baseline: baselineFinal ? liveFinalToStoredOutput(baselineFinal) : null,
+      optimized: optimizedFinal ? liveFinalToStoredOutput(optimizedFinal) : null,
+    };
+    return [liveRow, ...base];
+  }, [historyRows, baselineFinal, optimizedFinal]);
+
+  const summary = summarize(augmentedRows);
   const modelLabel = config?.model ? config.model.split("/").pop() : null;
 
   const isRunning =
@@ -50,20 +94,30 @@ export function HomePage() {
 
   const hasFinal = Boolean(baseline.final && optimized.final);
 
-  // Refresh history (and the averages derived from it) once both pipelines
-  // report the same run_id. Dedupe per run_id so re-renders don't refetch.
-  const lastInvalidatedRunId = useRef<string | null>(null);
+  // Whenever either pipeline finishes (new run_id appears on its `final`
+  // event), invalidate every cached query so the rest of the page picks up
+  // fresh data. Per-pipeline refs dedupe so the same run_id does not refetch
+  // on every re-render.
+  const lastBaselineRunId = useRef<string | null>(null);
+  const lastOptimizedRunId = useRef<string | null>(null);
   const baselineRunId = baseline.final?.run_id ?? null;
   const optimizedRunId = optimized.final?.run_id ?? null;
   useEffect(() => {
-    if (
-      baselineRunId &&
-      optimizedRunId &&
-      baselineRunId === optimizedRunId &&
-      lastInvalidatedRunId.current !== baselineRunId
-    ) {
-      lastInvalidatedRunId.current = baselineRunId;
-      queryClient.invalidateQueries({ queryKey: historyQueryKeys.all });
+    let shouldInvalidate = false;
+    if (baselineRunId && lastBaselineRunId.current !== baselineRunId) {
+      lastBaselineRunId.current = baselineRunId;
+      shouldInvalidate = true;
+    }
+    if (optimizedRunId && lastOptimizedRunId.current !== optimizedRunId) {
+      lastOptimizedRunId.current = optimizedRunId;
+      shouldInvalidate = true;
+    }
+    if (shouldInvalidate) {
+      // Exclude the pipeline-stream queries so a completed run doesn't
+      // re-open its own SSE connection against the same run_id.
+      queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] !== pipelineStreamQueryKeys.all[0],
+      });
     }
   }, [baselineRunId, optimizedRunId, queryClient]);
 
@@ -237,7 +291,7 @@ export function HomePage() {
           title="Per-stage breakdown"
           caption={summary ? `${summary.runs} runs` : "no runs yet"}
         />
-        <StagesSplit rows={historyRows} />
+        <StagesSplit rows={augmentedRows} />
       </section>
 
       {/* §04 · Per-query results */}
@@ -247,7 +301,7 @@ export function HomePage() {
           title="Per-query results"
           caption={summary ? "latest runs" : "no runs yet"}
         />
-        <QueriesSplit rows={historyRows} />
+        <QueriesSplit rows={augmentedRows} />
       </section>
 
       {/* §05 · Optimized architecture */}
