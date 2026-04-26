@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Inter_Tight, JetBrains_Mono } from "next/font/google";
 
 import { Providers } from "@/app/providers";
-import { FooterModelTag } from "@/components/footer-model-tag";
-import { SiteNav } from "@/components/site-nav";
+import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteNav } from "@/components/layout/site-nav";
 
 import "./globals.css";
 
@@ -45,13 +45,7 @@ export default function RootLayout({
           <main className="flex-1 mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10 py-12">
             {children}
           </main>
-          <footer className="border-t border-border">
-            <div className="mx-auto max-w-[1240px] px-5 sm:px-8 lg:px-10 py-6 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.06em] font-mono text-[var(--ink-dim)]">
-              <span>gaming · mental health dataset</span>
-              <FooterModelTag />
-              <span>SSE · FastAPI · Next.js</span>
-            </div>
-          </footer>
+          <SiteFooter />
         </Providers>
       </body>
     </html>

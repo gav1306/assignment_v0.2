@@ -3,13 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { NAV_ITEMS } from "@/components/layout/utils/constants";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { href: "/", label: "Compare" },
-  { href: "/history", label: "History" },
-  { href: "/chat", label: "Chat" },
-] as const;
 
 export function SiteNav() {
   const pathname = usePathname();

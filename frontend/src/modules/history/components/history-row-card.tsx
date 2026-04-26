@@ -34,11 +34,11 @@ function SideStat({
 }: SideStatProps) {
   const isOptimized = variant === "optimized";
   return (
-    <div className="text-right space-y-1.5">
-      <div className="flex items-center justify-end gap-1.5">
+    <div className="text-left sm:text-right space-y-1.5 min-w-0">
+      <div className="flex items-center justify-start sm:justify-end gap-1.5">
         <span
           className={cn(
-            "inline-block h-1.5 w-1.5 rounded-full",
+            "inline-block h-1.5 w-1.5 rounded-full shrink-0",
             isOptimized
               ? "bg-[var(--accent-mint)] shadow-[0_0_6px_var(--accent-glow)]"
               : "bg-[var(--baseline)]",
@@ -88,9 +88,9 @@ export function HistoryRowCard({ row }: { row: HistoryRow }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left p-5"
+        className="w-full text-left p-4 sm:p-5"
       >
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div className="min-w-0 flex-1 space-y-2">
             <p className="text-[14px] leading-snug break-words text-foreground">
               {row.question}
@@ -109,7 +109,7 @@ export function HistoryRowCard({ row }: { row: HistoryRow }) {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-5 shrink-0">
+          <div className="grid grid-cols-2 gap-3 w-full sm:w-auto sm:gap-5 sm:shrink-0 pt-3 sm:pt-0 border-t border-border/60 sm:border-t-0">
             <SideStat
               variant="baseline"
               status={b?.status}
@@ -164,7 +164,7 @@ export function HistoryRowCard({ row }: { row: HistoryRow }) {
       </button>
 
       {expanded ? (
-        <div className="px-5 pb-5">
+        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-4 border-t border-border/70">
             <RunDetail pipeline="baseline" output={b} />
             <RunDetail pipeline="optimized" output={o} />

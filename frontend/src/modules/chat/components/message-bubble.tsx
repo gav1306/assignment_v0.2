@@ -5,7 +5,7 @@ import type { UIMessage } from "ai";
 import {
   getMessageText,
   parseAssistantText,
-} from "@/modules/chat/utils/parse-assistant-text";
+} from "@/modules/chat/utils/helper";
 
 export function MessageBubble({ message }: { message: UIMessage }) {
   const text = getMessageText(message);

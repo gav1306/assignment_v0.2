@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useChatPipeline } from "@/modules/chat/hooks/use-chat-pipeline";
-import { SAMPLE_FOLLOWUPS } from "@/modules/chat/utils/constants";
+import { SAMPLE_FOLLOWUPS } from "@/modules/chat/utils/const";
 import { QuestionSchema, type QuestionForm } from "@/utils/schemas";
 
 export function ChatPage() {
@@ -46,14 +46,13 @@ export function ChatPage() {
           §00 · multi-turn · contextual
         </p>
         <h1 className="text-[44px] sm:text-[48px] leading-[0.98] tracking-[-0.03em] font-medium">
-          Multi-turn{" "}
-          <span className="text-[var(--accent-mint)]">chat</span>.
+          Multi-turn <span className="text-[var(--accent-mint)]">chat</span>.
         </h1>
         <p className="max-w-2xl text-[14px] leading-relaxed text-[var(--ink-muted)]">
           Ask follow-up questions in natural language. Each turn rewrites the
           message into a standalone question using prior context, then runs the
-          optimized pipeline. Click &ldquo;how I answered&rdquo; on any reply
-          to see the SQL.
+          optimized pipeline. Click &ldquo;how I answered&rdquo; on any reply to
+          see the SQL.
         </p>
       </Reveal>
 
@@ -61,9 +60,7 @@ export function ChatPage() {
         <SectionHead
           num="01"
           title="Conversation"
-          caption={
-            isStreaming ? "streaming" : `${messages.length} messages`
-          }
+          caption={isStreaming ? "streaming" : `${messages.length} messages`}
         />
 
         <div className="rounded-[10px] border border-border bg-[var(--bg-elev)] p-5 space-y-3 min-h-[280px]">

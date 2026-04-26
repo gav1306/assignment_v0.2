@@ -1,16 +1,17 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+
 import { CountUp } from "@/components/comparison/count-up";
 import { Reveal } from "@/components/comparison/reveal";
 import { SectionHead } from "@/components/comparison/section-head";
+import { OptimizationCard } from "@/components/pipeline/optimization-card";
+import { PipelineDiagram } from "@/components/pipeline/pipeline-diagram";
 import {
   OPTIMIZATIONS,
-  OptimizationCard,
-} from "@/components/pipeline/optimization-card";
-import {
   PIPELINE_NODES,
-  PipelineDiagram,
-} from "@/components/pipeline/pipeline-diagram";
+} from "@/utils/const";
 import {
   MetricsPanel,
   MetricsPanelEmpty,
@@ -25,8 +26,10 @@ import { useConfig } from "@/modules/config/hooks/use-config";
 import { useHistory } from "@/modules/history/hooks/use-history";
 import { useRunStore } from "@/stores/run-store";
 import { formatDeltaPct, formatTokens } from "@/utils/format";
+import { historyQueryKeys } from "@/utils/query-keys";
 
 export function HomePage() {
+  const queryClient = useQueryClient();
   const baseline = usePipelineStream("baseline");
   const optimized = usePipelineStream("optimized");
   const currentQuestion = useRunStore((s) => s.question);
@@ -44,6 +47,23 @@ export function HomePage() {
     optimized.state === "connecting";
 
   const hasFinal = Boolean(baseline.final && optimized.final);
+
+  // Refresh history (and the averages derived from it) once both pipelines
+  // report the same run_id. Dedupe per run_id so re-renders don't refetch.
+  const lastInvalidatedRunId = useRef<string | null>(null);
+  const baselineRunId = baseline.final?.run_id ?? null;
+  const optimizedRunId = optimized.final?.run_id ?? null;
+  useEffect(() => {
+    if (
+      baselineRunId &&
+      optimizedRunId &&
+      baselineRunId === optimizedRunId &&
+      lastInvalidatedRunId.current !== baselineRunId
+    ) {
+      lastInvalidatedRunId.current = baselineRunId;
+      queryClient.invalidateQueries({ queryKey: historyQueryKeys.all });
+    }
+  }, [baselineRunId, optimizedRunId, queryClient]);
 
   function onSubmit(question: string) {
     const { question: q, runId } = startRun(question);

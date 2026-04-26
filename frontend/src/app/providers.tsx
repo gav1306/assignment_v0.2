@@ -3,7 +3,7 @@
 import {
   QueryClient,
   QueryClientProvider,
-  isServer,
+  environmentManager,
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState, type ReactNode } from "react";
@@ -23,7 +23,7 @@ function makeQueryClient() {
 let browserQueryClient: QueryClient | undefined;
 
 function getQueryClient() {
-  if (isServer) return makeQueryClient();
+  if (environmentManager.isServer()) return makeQueryClient();
   if (!browserQueryClient) browserQueryClient = makeQueryClient();
   return browserQueryClient;
 }

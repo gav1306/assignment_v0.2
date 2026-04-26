@@ -58,13 +58,18 @@ function ChartContainer({
           "[&_.recharts-sector[stroke='#fff']]:stroke-transparent",
           "[&_.recharts-sector]:outline-hidden",
           "[&_.recharts-surface]:outline-hidden",
-          "flex aspect-video justify-center text-xs",
+          "relative aspect-video w-full text-xs",
           className,
         )}
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>
+        <RechartsPrimitive.ResponsiveContainer
+          width="100%"
+          height="100%"
+          minWidth={0}
+          minHeight={0}
+        >
           {children}
         </RechartsPrimitive.ResponsiveContainer>
       </div>

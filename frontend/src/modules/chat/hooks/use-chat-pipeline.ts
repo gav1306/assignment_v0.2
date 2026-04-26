@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { TextStreamChatTransport } from "ai";
 import { useId, useMemo } from "react";
 
-import { CHAT_API_URL } from "@/modules/chat/utils/constants";
+import { CHAT_API_URL } from "@/modules/chat/utils/const";
 
 export function useChatPipeline() {
   const transport = useMemo(
