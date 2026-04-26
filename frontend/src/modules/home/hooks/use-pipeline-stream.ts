@@ -46,7 +46,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api";
 // Wrap fetchEventSource as a pull-based async iterator so we can hand it to
 // TanStack's experimental_streamedQuery. The internal AbortController is
 // linked to the query's signal AND aborted locally once a terminal SSE event
-// arrives — without that, the connection would stay open after run_completed.
+// arrives; without that, the connection would stay open after run_completed.
 async function* createPipelineSseStream(
   url: string,
   parentSignal: AbortSignal,

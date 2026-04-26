@@ -1,6 +1,10 @@
 "use client";
 
 import { BarFill } from "@/components/comparison/bar-fill";
+import {
+  COMPARISON_BAR_OPTIMIZED_DELAY_OFFSET_MS,
+  COMPARISON_BAR_TOKENS_ROW_DELAY_MS,
+} from "@/modules/home/utils/const";
 import { formatMs, formatTokens } from "@/utils/format";
 
 interface ComparisonChartProps {
@@ -57,7 +61,7 @@ function Row({
         <BarFill
           target={optimizedValue / max}
           variant="optimized"
-          delayMs={delayMs + 120}
+          delayMs={delayMs + COMPARISON_BAR_OPTIMIZED_DELAY_OFFSET_MS}
         />
         <span className="num-s text-foreground">{optimizedDisplay}</span>
       </div>
@@ -87,7 +91,7 @@ export function ComparisonChart({
         optimizedValue={optimizedTokens}
         baselineDisplay={`${formatTokens(baselineTokens)}t`}
         optimizedDisplay={`${formatTokens(optimizedTokens)}t`}
-        delayMs={120}
+        delayMs={COMPARISON_BAR_TOKENS_ROW_DELAY_MS}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { FooterModelTag } from "@/components/layout/footer-model-tag";
 import {
   FOOTER_DATASET_LABEL,
   FOOTER_STACK_LABEL,
-} from "@/components/layout/utils/constants";
+} from "@/components/layout/utils/const";
 
 export function SiteFooter() {
   return (

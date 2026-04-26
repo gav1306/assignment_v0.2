@@ -223,7 +223,7 @@ class OpenRouterLLMClient:
             f"Every SELECT MUST read from the dataset table `{table_name}` "
             "(directly or via a CTE that reads from it). NEVER emit a "
             "constant-only SELECT such as `SELECT 'hi' AS msg` or "
-            "`SELECT 'answer' AS x LIMIT 1` — those bypass the dataset and "
+            "`SELECT 'answer' AS x LIMIT 1`: those bypass the dataset and "
             "fabricate rows.\n"
             "Use the cannot_answer sentinel below in any of these cases:\n"
             "  • the input is conversational (greetings, small talk, thanks)\n"

@@ -7,6 +7,7 @@ DEFAULT_MODEL: str = "openai/gpt-5-nano"
 
 DEFAULT_MAX_COMPLETION_TOKENS_SQL: int = 2048
 DEFAULT_MAX_COMPLETION_TOKENS_ANSWER: int = 800
+DEFAULT_MAX_COMPLETION_TOKENS_REWRITE: int = 300
 DEFAULT_TIMEOUT_MS: int = 30_000
 
 # Reasoning effort caps the hidden-reasoning token budget for reasoning models

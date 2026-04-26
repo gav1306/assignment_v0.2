@@ -2,17 +2,18 @@
 
 import { useSyncExternalStore } from "react";
 
+import { RELATIVE_TIME_TICK_MS } from "@/modules/history/utils/const";
 import { formatRelativeTime } from "@/modules/history/utils/relative-time";
 
 function subscribeClock(notify: () => void) {
-  const id = setInterval(notify, 30_000);
+  const id = setInterval(notify, RELATIVE_TIME_TICK_MS);
   return () => clearInterval(id);
 }
 
 function useClientTick(): number | null {
   return useSyncExternalStore(
     subscribeClock,
-    () => Math.floor(Date.now() / 30_000),
+    () => Math.floor(Date.now() / RELATIVE_TIME_TICK_MS),
     () => null,
   );
 }

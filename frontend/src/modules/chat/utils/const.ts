@@ -7,3 +7,6 @@ export const SAMPLE_FOLLOWUPS: readonly string[] = [
 
 export const CHAT_API_URL =
   (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api") + "/chat";
+
+export const THINKING_DOT_STAGGER_MS = 120;
+

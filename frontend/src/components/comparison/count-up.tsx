@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { COUNT_UP_DEFAULT_DURATION_MS } from "@/components/comparison/utils/const";
+
 interface CountUpProps {
   value: number;
   durationMs?: number;
@@ -16,7 +18,7 @@ function easeOutCubic(t: number) {
 
 export function CountUp({
   value,
-  durationMs = 1200,
+  durationMs = COUNT_UP_DEFAULT_DURATION_MS,
   decimals = 0,
   suffix = "",
   prefix = "",

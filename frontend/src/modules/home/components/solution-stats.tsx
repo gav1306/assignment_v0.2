@@ -5,6 +5,7 @@ import { Reveal } from "@/components/comparison/reveal";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { BenchmarkSummary } from "@/modules/home/utils/aggregate";
+import { STAT_TILE_REVEAL_STEP_MS } from "@/modules/home/utils/const";
 import { PUBLIC_TESTS_PASSING, PUBLIC_TESTS_TOTAL } from "@/utils/const";
 import { formatMs, formatTokens } from "@/utils/format";
 
@@ -78,7 +79,7 @@ export function SolutionStats({ summary }: SolutionStatsProps) {
             : "awaiting first run"
         }
         accent
-        delayMs={0}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 0}
       />
       <Tile
         label="Public tests"
@@ -92,7 +93,7 @@ export function SolutionStats({ summary }: SolutionStatsProps) {
         }
         subtitle="tests/test_public.py"
         accent
-        delayMs={60}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 1}
       />
       <Tile
         label="Calls saved"
@@ -100,19 +101,19 @@ export function SolutionStats({ summary }: SolutionStatsProps) {
           callsSaved !== null ? <CountUp value={callsSaved} /> : DASH
         }
         subtitle="unanswerable short-circuit"
-        delayMs={120}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 2}
       />
       <Tile
         label="p50 latency"
         value={p50 !== null ? formatMs(p50) : DASH}
         subtitle={acrossRunsLabel}
-        delayMs={180}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 3}
       />
       <Tile
         label="p95 latency"
         value={p95 !== null ? formatMs(p95) : DASH}
         subtitle={acrossRunsLabel}
-        delayMs={240}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 4}
       />
       <Tile
         label="Token split"
@@ -130,7 +131,7 @@ export function SolutionStats({ summary }: SolutionStatsProps) {
           )
         }
         subtitle="prompt / completion · per run"
-        delayMs={300}
+        delayMs={STAT_TILE_REVEAL_STEP_MS * 5}
       />
     </div>
   );

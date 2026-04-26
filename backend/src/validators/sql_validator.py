@@ -108,7 +108,7 @@ def _enforce_known_tables(tree: exp.Expression, schema: SchemaContext) -> None:
         raise ValidationError(f"unknown_table: {sorted(unknown)}")
     # Closes a loophole where the model improvises a constant-only SELECT
     # (no FROM, or FROM a CTE that itself has no real FROM) to satisfy the
-    # "must return SQL" contract — e.g. for greetings or chitchat. Such a
+    # "must return SQL" contract (e.g. for greetings or chitchat). Such a
     # query bypasses the dataset entirely and synthesizes rows; reject it
     # so the model is forced to use the cannot_answer sentinel instead.
     if schema.table not in referenced:

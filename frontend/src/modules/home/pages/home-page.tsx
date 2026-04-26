@@ -25,30 +25,12 @@ import { SolutionStats } from "@/modules/home/components/solution-stats";
 import { StagesSplit } from "@/modules/home/components/stages-split";
 import { usePipelineStream } from "@/modules/home/hooks/use-pipeline-stream";
 import { summarize } from "@/modules/home/utils/aggregate";
+import { HERO_COUNTUP_DURATION_MS } from "@/modules/home/utils/const";
+import { stitchLiveRunIntoHistory } from "@/modules/home/utils/live-history";
 import { pipelineStreamQueryKeys } from "@/modules/home/utils/query-keys";
 import { useConfig } from "@/modules/config/hooks/use-config";
 import { useHistory } from "@/modules/history/hooks/use-history";
 import { useRunStore } from "@/stores/run-store";
-import type {
-  HistoryRow,
-  RunCompletedEvent,
-  StoredPipelineOutput,
-} from "@/types";
-
-function liveFinalToStoredOutput(
-  final: RunCompletedEvent,
-): StoredPipelineOutput {
-  return {
-    status: final.status,
-    question: final.question,
-    request_id: final.run_id,
-    sql: final.sql,
-    rows: final.rows,
-    answer: final.answer,
-    timings: final.timings,
-    total_llm_stats: final.total_llm_stats,
-  };
-}
 
 export function HomePage() {
   const queryClient = useQueryClient();
@@ -67,21 +49,10 @@ export function HomePage() {
   // out and we read the canonical persisted version.
   const baselineFinal = baseline.final;
   const optimizedFinal = optimized.final;
-  const augmentedRows = useMemo<HistoryRow[] | undefined>(() => {
-    const liveRunId = optimizedFinal?.run_id ?? baselineFinal?.run_id ?? null;
-    if (!liveRunId) return historyRows;
-    const base = historyRows ?? [];
-    if (base.some((r) => r.id === liveRunId)) return base;
-    const liveRow: HistoryRow = {
-      id: liveRunId,
-      question:
-        optimizedFinal?.question ?? baselineFinal?.question ?? "",
-      created_at: new Date().toISOString(),
-      baseline: baselineFinal ? liveFinalToStoredOutput(baselineFinal) : null,
-      optimized: optimizedFinal ? liveFinalToStoredOutput(optimizedFinal) : null,
-    };
-    return [liveRow, ...base];
-  }, [historyRows, baselineFinal, optimizedFinal]);
+  const augmentedRows = useMemo(
+    () => stitchLiveRunIntoHistory(historyRows, baselineFinal, optimizedFinal),
+    [historyRows, baselineFinal, optimizedFinal],
+  );
 
   const summary = summarize(augmentedRows);
   const modelLabel = config?.model ? config.model.split("/").pop() : null;
@@ -174,7 +145,7 @@ export function HomePage() {
                       <CountUp
                         value={summary.optimizedSuccessPct}
                         decimals={1}
-                        durationMs={1400}
+                        durationMs={HERO_COUNTUP_DURATION_MS}
                       />
                       <span className="text-2xl text-[var(--ink-dim)] ml-1">
                         %
@@ -200,7 +171,7 @@ export function HomePage() {
               <div className="p-5 sm:p-6">
                 <p className="label-mono mb-3">Public tests</p>
                 <p className="text-[44px] leading-none font-mono font-medium tracking-[-0.02em] text-[var(--accent-mint)] tabular-nums">
-                  <CountUp value={PUBLIC_TESTS_PASSING} durationMs={1400} />
+                  <CountUp value={PUBLIC_TESTS_PASSING} durationMs={HERO_COUNTUP_DURATION_MS} />
                   <span className="text-2xl text-[var(--ink-dim)] font-mono ml-1.5">
                     / {PUBLIC_TESTS_TOTAL}
                   </span>

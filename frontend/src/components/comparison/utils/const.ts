@@ -1,0 +1,1 @@
+export const COUNT_UP_DEFAULT_DURATION_MS = 1200;

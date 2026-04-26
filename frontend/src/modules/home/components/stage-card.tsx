@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { STAGE_CARD_REVEAL_STEP_MS } from "@/modules/home/utils/const";
 import type {
   PipelineKind,
   StageEvent,
@@ -196,7 +197,7 @@ export function StageCard({
         status === "pending" && "opacity-60",
       )}
       style={{
-        animationDelay: `${index * 60}ms`,
+        animationDelay: `${index * STAGE_CARD_REVEAL_STEP_MS}ms`,
       }}
     >
       <div className="p-3.5">

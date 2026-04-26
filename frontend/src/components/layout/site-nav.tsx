@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { NAV_ITEMS } from "@/components/layout/utils/constants";
+import { NAV_ITEMS } from "@/components/layout/utils/const";
 import { cn } from "@/lib/utils";
 
 export function SiteNav() {

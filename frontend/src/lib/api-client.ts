@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
     const message = extractErrorMessage(error);
     if (process.env.NODE_ENV !== "production") {
       console.error(
-        `[api] ${error.config?.method?.toUpperCase() ?? "?"} ${error.config?.url ?? "?"} — ${message}`,
+        `[api] ${error.config?.method?.toUpperCase() ?? "?"} ${error.config?.url ?? "?"}: ${message}`,
       );
     }
     return Promise.reject(new Error(message));

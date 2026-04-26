@@ -17,7 +17,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { MessageBubble } from "@/modules/chat/components/message-bubble";
 import { useChatPipeline } from "@/modules/chat/hooks/use-chat-pipeline";
-import { SAMPLE_FOLLOWUPS } from "@/modules/chat/utils/const";
+import {
+  SAMPLE_FOLLOWUPS,
+  THINKING_DOT_STAGGER_MS,
+} from "@/modules/chat/utils/const";
 import { QuestionSchema, type QuestionForm } from "@/utils/schemas";
 
 export function ChatPage() {
@@ -89,13 +92,15 @@ export function ChatPage() {
                   <span className="animate-pulse">.</span>
                   <span
                     className="animate-pulse"
-                    style={{ animationDelay: "120ms" }}
+                    style={{ animationDelay: `${THINKING_DOT_STAGGER_MS}ms` }}
                   >
                     .
                   </span>
                   <span
                     className="animate-pulse"
-                    style={{ animationDelay: "240ms" }}
+                    style={{
+                      animationDelay: `${THINKING_DOT_STAGGER_MS * 2}ms`,
+                    }}
                   >
                     .
                   </span>

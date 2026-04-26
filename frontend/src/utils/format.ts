@@ -42,7 +42,7 @@ export const UNTRACKED_LABEL = "untracked";
  * A pipeline reports "untracked" tokens when its stages clearly ran (we have
  * non-zero timing for sql_generation) but `total_tokens` came back as 0. The
  * baseline pipeline always lands here because the preserved C4 bug never
- * increments `_stats` (so even `llm_calls` reads as 0 — we cannot rely on it).
+ * increments `_stats` (so even `llm_calls` reads as 0; we cannot rely on it).
  */
 export function isTokensUntracked(
   stats: { total_tokens: number },

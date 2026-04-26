@@ -10,6 +10,7 @@ First-turn questions are returned verbatim, saving an LLM call.
 
 from __future__ import annotations
 
+from src.constants.llm_constants import DEFAULT_MAX_COMPLETION_TOKENS_REWRITE
 from src.constants.stream_constants import REWRITE_SYSTEM_PROMPT
 from src.services.llm_service import (
     EmptyContentError,
@@ -56,7 +57,7 @@ def rewrite_to_standalone(history: list[tuple[str, str]]) -> str:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.0,
-            max_completion_tokens=300,
+            max_completion_tokens=DEFAULT_MAX_COMPLETION_TOKENS_REWRITE,
             reasoning_effort="low",
         )
         return text.strip().strip('"').strip("'")

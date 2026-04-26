@@ -8,13 +8,16 @@ import { SectionHead } from "@/components/comparison/section-head";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HistoryRowCard } from "@/modules/history/components/history-row-card";
+import {
+  HISTORY_PAGE_SIZE,
+  HISTORY_ROW_REVEAL_MAX_MS,
+  HISTORY_ROW_REVEAL_STEP_MS,
+} from "@/modules/history/utils/const";
 import { useHistory } from "@/modules/history/hooks/use-history";
-
-const PAGE_SIZE = 10;
 
 export function HistoryPage() {
   const [page, setPage] = useState(0);
-  const offset = page * PAGE_SIZE;
+  const offset = page * HISTORY_PAGE_SIZE;
 
   const {
     data: pageData,
@@ -22,13 +25,13 @@ export function HistoryPage() {
     isPending,
     isFetching,
     refetch,
-  } = useHistory(PAGE_SIZE, offset);
+  } = useHistory(HISTORY_PAGE_SIZE, offset);
 
   const rows = pageData?.runs;
   const total = pageData?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
   const showingFrom = total === 0 ? 0 : offset + 1;
-  const showingTo = Math.min(offset + PAGE_SIZE, total);
+  const showingTo = Math.min(offset + HISTORY_PAGE_SIZE, total);
 
   return (
     <div className="flex flex-col gap-[56px]">
@@ -103,7 +106,13 @@ export function HistoryPage() {
         {rows && rows.length > 0 ? (
           <div className="space-y-3">
             {rows.map((row, idx) => (
-              <Reveal key={row.id} delayMs={Math.min(idx * 40, 240)}>
+              <Reveal
+                key={row.id}
+                delayMs={Math.min(
+                  idx * HISTORY_ROW_REVEAL_STEP_MS,
+                  HISTORY_ROW_REVEAL_MAX_MS,
+                )}
+              >
                 <HistoryRowCard row={row} />
               </Reveal>
             ))}
