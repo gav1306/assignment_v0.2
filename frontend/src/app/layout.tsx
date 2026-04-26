@@ -42,7 +42,7 @@ export default function RootLayout({
       >
         <Providers>
           <SiteNav />
-          <main className="flex-1 mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10 py-12">
+          <main className="flex-1 mx-auto w-full max-w-[1240px] px-5 sm:px-8 lg:px-10 pt-6 pb-12">
             {children}
           </main>
           <SiteFooter />

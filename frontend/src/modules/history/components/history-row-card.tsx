@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 
-import { DeltaBadge } from "@/components/comparison/delta-badge";
 import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/modules/history/components/relative-time";
 import { RunDetail } from "@/modules/history/components/run-detail";
 import { StatusBadge } from "@/modules/history/components/status-badge";
 import type { HistoryRow } from "@/types";
 import {
-  deltaIsImprovement,
-  formatDeltaPct,
   formatMs,
   formatTokens,
   isTokensUntracked,
@@ -81,7 +78,6 @@ export function HistoryRowCard({ row }: { row: HistoryRow }) {
   const optimizedTokensUntracked = o
     ? isTokensUntracked(o.total_llm_stats, o.timings)
     : false;
-  const tokensComparable = !baselineTokensUntracked && !optimizedTokensUntracked;
 
   return (
     <div className="rounded-[10px] border border-border bg-[var(--bg-elev)] overflow-hidden ease-expo-out transition-colors hover:border-[var(--line-strong)]">
@@ -127,40 +123,6 @@ export function HistoryRowCard({ row }: { row: HistoryRow }) {
           </div>
         </div>
 
-        {b && o ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <DeltaBadge
-              label="Δ latency"
-              value={formatDeltaPct(bMs, oMs)}
-              improved={deltaIsImprovement("latency", bMs, oMs)}
-              size="sm"
-            />
-            {tokensComparable ? (
-              <DeltaBadge
-                label="Δ tokens"
-                value={formatDeltaPct(bTokens, oTokens)}
-                improved={deltaIsImprovement("tokens", bTokens, oTokens)}
-                size="sm"
-              />
-            ) : !optimizedTokensUntracked && oTokens > 0 ? (
-              <span
-                title={`baseline ${UNTRACKED_LABEL} — comparable Δ unavailable`}
-                className="inline-flex items-center gap-1.5 h-6 rounded-full border border-[var(--accent-mint)]/30 bg-[var(--accent-mint)]/10 px-2.5 font-mono text-[11px] text-[var(--accent-mint)]"
-              >
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent-mint)] shadow-[0_0_6px_var(--accent-glow)]" />
-                <span className="uppercase tracking-[0.06em] text-[var(--ink-dim)]">
-                  tokens
-                </span>
-                <span className="tabular-nums">{formatTokens(oTokens)}</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 h-6 rounded-full border border-border bg-[var(--bg-elev)] px-2.5 font-mono text-[11px] text-[var(--ink-dim)]">
-                <span className="uppercase tracking-[0.06em]">tokens</span>
-                <span className="italic">{UNTRACKED_LABEL}</span>
-              </span>
-            )}
-          </div>
-        ) : null}
       </button>
 
       {expanded ? (

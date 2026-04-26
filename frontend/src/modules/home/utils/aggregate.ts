@@ -1,3 +1,4 @@
+import { PIPELINE_DEFAULT_LLM_CALLS } from "@/utils/const";
 import type { HistoryRow, StoredPipelineOutput } from "@/types";
 
 export type StageKey =
@@ -30,6 +31,18 @@ export interface StageRow {
 function avg(values: number[]): number {
   if (!values.length) return 0;
   return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+// Mirrors backend/scripts/compare_pipelines.py:_percentile so the frontend
+// dashboards line up with the numbers documented in SOLUTION_NOTES.md.
+export function percentile(values: number[], pct: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.round((pct / 100) * (sorted.length - 1))),
+  );
+  return sorted[idx];
 }
 
 export function aggregateStages(rows: HistoryRow[] | undefined): StageRow[] {
@@ -106,6 +119,17 @@ export interface BenchmarkSummary {
   optimizedAvgCalls: number;
   baselineSuccessPct: number;
   optimizedSuccessPct: number;
+  baselineSuccessfulRuns: number;
+  optimizedSuccessfulRuns: number;
+  optimizedP50Ms: number;
+  optimizedP95Ms: number;
+  optimizedAvgPromptTokens: number;
+  optimizedAvgCompletionTokens: number;
+  // Runs in which the optimized pipeline made fewer than the typical 2 LLM
+  // calls. The unanswerable sentinel and the deterministic refusal both
+  // skip the answer-generation call, so this counts how often we avoided
+  // a redundant LLM round-trip.
+  shortCircuitSavedCalls: number;
 }
 
 export function summarize(
@@ -119,15 +143,20 @@ export function summarize(
     .map((r) => r.optimized)
     .filter((x): x is StoredPipelineOutput => Boolean(x));
 
+  const successCount = (xs: StoredPipelineOutput[]) =>
+    xs.filter((x) => x.status === "success").length;
   const successPct = (xs: StoredPipelineOutput[]) =>
-    xs.length === 0
-      ? 0
-      : (xs.filter((x) => x.status === "success").length / xs.length) * 100;
+    xs.length === 0 ? 0 : (successCount(xs) / xs.length) * 100;
+
+  const optimizedLatencies = optimizeds.map((x) => x.timings.total_ms);
+  const tokenTrackedOptimized = optimizeds.filter(
+    (x) => x.total_llm_stats.total_tokens > 0,
+  );
 
   return {
     runs: rows.length,
     baselineAvgMs: Math.round(avg(baselines.map((x) => x.timings.total_ms))),
-    optimizedAvgMs: Math.round(avg(optimizeds.map((x) => x.timings.total_ms))),
+    optimizedAvgMs: Math.round(avg(optimizedLatencies)),
     baselineAvgTokens: Math.round(
       avg(baselines.map((x) => x.total_llm_stats.total_tokens)),
     ),
@@ -142,5 +171,20 @@ export function summarize(
     ),
     baselineSuccessPct: Math.round(successPct(baselines) * 10) / 10,
     optimizedSuccessPct: Math.round(successPct(optimizeds) * 10) / 10,
+    baselineSuccessfulRuns: successCount(baselines),
+    optimizedSuccessfulRuns: successCount(optimizeds),
+    optimizedP50Ms: Math.round(percentile(optimizedLatencies, 50)),
+    optimizedP95Ms: Math.round(percentile(optimizedLatencies, 95)),
+    optimizedAvgPromptTokens: Math.round(
+      avg(tokenTrackedOptimized.map((x) => x.total_llm_stats.prompt_tokens)),
+    ),
+    optimizedAvgCompletionTokens: Math.round(
+      avg(
+        tokenTrackedOptimized.map((x) => x.total_llm_stats.completion_tokens),
+      ),
+    ),
+    shortCircuitSavedCalls: optimizeds.filter(
+      (x) => x.total_llm_stats.llm_calls < PIPELINE_DEFAULT_LLM_CALLS,
+    ).length,
   };
 }

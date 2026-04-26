@@ -8,6 +8,9 @@ export function formatTokens(n: number): string {
   return `${(n / 1000).toFixed(1)}k`;
 }
 
+// Kept for back-compat / future use. The home page no longer renders cross-
+// pipeline deltas because the baseline pipeline never completes a successful
+// run (preserved C1 bug), which makes the comparison misleading.
 export function formatDeltaPct(baseline: number, optimized: number): string {
   if (baseline === 0) return "—";
   const delta = ((optimized - baseline) / baseline) * 100;
@@ -23,6 +26,14 @@ export function deltaIsImprovement(
   if (baseline === 0) return false;
   // Lower is better for both latency and tokens.
   return optimized < baseline;
+}
+
+export function formatPercent(n: number, decimals = 1): string {
+  return `${n.toFixed(decimals)}%`;
+}
+
+export function formatTokenSplit(prompt: number, completion: number): string {
+  return `${formatTokens(prompt)} / ${formatTokens(completion)}`;
 }
 
 export const UNTRACKED_LABEL = "untracked";
